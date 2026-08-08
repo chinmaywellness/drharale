@@ -440,10 +440,18 @@ async function handleRoute(request, { params }) {
       if (!(await isAdminEmail(database, email))) {
         return handleCORS(NextResponse.json({ ok: true, message: 'If eligible, an OTP was sent.' }))
       }
-      const code = ('' + Math.floor(100000 + Math.random() * 900000))
+      const now = Date.now()
+      const existingOtp = await database.collection('otps').findOne({ email })
+      let code
+      if (existingOtp && existingOtp.code && existingOtp.expiresAt > now && existingOtp.createdAt && (now - existingOtp.createdAt) < 90 * 1000) {
+        // Re-send within 90s: reuse the same code so the emailed code always matches the DB
+        code = existingOtp.code
+      } else {
+        code = '' + Math.floor(100000 + Math.random() * 900000)
+      }
       await database.collection('otps').updateOne(
         { email },
-        { $set: { email, code, expiresAt: Date.now() + 10 * 60 * 1000, attempts: 0 } },
+        { $set: { email, code, expiresAt: now + 15 * 60 * 1000, createdAt: now, attempts: 0 } },
         { upsert: true }
       )
       await sendOtpEmail(email, code)
@@ -455,11 +463,11 @@ async function handleRoute(request, { params }) {
       const email = clean(body.email, 120).toLowerCase()
       const code = clean(body.code, 6)
       const rec = await database.collection('otps').findOne({ email })
-      if (!rec || rec.expiresAt < Date.now() || (rec.attempts || 0) > 6) {
+      if (!rec || rec.expiresAt < Date.now() || (rec.attempts || 0) > 10) {
         return handleCORS(NextResponse.json({ error: 'Invalid or expired OTP' }, { status: 401 }))
       }
       await database.collection('otps').updateOne({ email }, { $inc: { attempts: 1 } })
-      if (rec.code !== code) {
+      if (String(rec.code).trim() !== String(code).trim()) {
         return handleCORS(NextResponse.json({ error: 'Invalid or expired OTP' }, { status: 401 }))
       }
       if (!(await isAdminEmail(database, email))) {
