@@ -439,6 +439,7 @@ function ContentTab() {
         <Input value={(c.booking.slots || []).join(', ')} onChange={(e) => set('booking.slots', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))} />
         <F label="Booking heading" path="booking.heading" />
         <F label="Booking subheading" path="booking.subheading" />
+        <div><label className="text-sm font-medium text-brand-charcoal/70">Current batch banner (16:9)</label><ImageField value={c.booking.bannerImage} onChange={(v) => set('booking.bannerImage', v)} /></div>
       </Card>
 
       <Card className="p-5 rounded-2xl space-y-3">

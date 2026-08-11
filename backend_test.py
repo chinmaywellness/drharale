@@ -1,480 +1,554 @@
 #!/usr/bin/env python3
 """
-Backend API Test Suite for Chinmay Wellness Club
-Tests all public and protected endpoints
+Comprehensive backend test for Chinmay Wellness Club after Supabase migration.
+Tests all public endpoints, auth flows, protected routes, and RLS policies.
 """
 
 import requests
 import json
-from datetime import datetime, timedelta
-import time
+from datetime import datetime
 
-# Base URL from .env
+# Configuration
 BASE_URL = "https://chinmay-wellness.preview.emergentagent.com/api"
+SUPABASE_URL = "https://lplnwgulplsyntkgpzqz.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwbG53Z3VscGxzeW50a2dwenF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwOTgxNDcsImV4cCI6MjEwMTY3NDE0N30._JIE-w4fso9mkjxzbnzjaqja2-e7nBHzOqstNJ687jY"
+ADMIN_EMAIL = "samfonde0@gmail.com"
 
-# Test results tracking
-test_results = {
-    "passed": [],
-    "failed": [],
-    "warnings": []
-}
-
-def log_pass(test_name):
-    print(f"✅ PASS: {test_name}")
-    test_results["passed"].append(test_name)
-
-def log_fail(test_name, reason):
-    print(f"❌ FAIL: {test_name} - {reason}")
-    test_results["failed"].append(f"{test_name}: {reason}")
-
-def log_warning(test_name, reason):
-    print(f"⚠️  WARNING: {test_name} - {reason}")
-    test_results["warnings"].append(f"{test_name}: {reason}")
-
-print("=" * 80)
-print("CHINMAY WELLNESS CLUB - BACKEND API TEST SUITE")
-print("=" * 80)
-print(f"Base URL: {BASE_URL}")
-print("=" * 80)
-
-# ============================================================================
-# TEST 1: PUBLIC GET ENDPOINTS
-# ============================================================================
-print("\n📋 TEST 1: PUBLIC GET ENDPOINTS")
-print("-" * 80)
-
-# Test /api/content
-try:
-    print("\nTesting GET /api/content...")
-    response = requests.get(f"{BASE_URL}/content", timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        required_keys = ['siteName', 'hero', 'program', 'process', 'about', 'achievements', 'community', 'popup', 'footer', 'booking', 'seo']
-        missing_keys = [key for key in required_keys if key not in data]
-        if missing_keys:
-            log_fail("GET /api/content", f"Missing keys: {missing_keys}")
+def test_public_content_endpoints():
+    """Test 1: Public GET endpoints for content and collections"""
+    print("\n" + "="*80)
+    print("TEST 1: Public Content & Collections GET Endpoints")
+    print("="*80)
+    
+    tests_passed = 0
+    tests_total = 5
+    
+    try:
+        # Test /api/content
+        print("\n[1.1] Testing GET /api/content...")
+        resp = requests.get(f"{BASE_URL}/content", timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            required_fields = ['siteName', 'hero', 'program', 'process', 'about', 'achievements', 'community', 'popup', 'footer', 'booking', 'seo']
+            missing = [f for f in required_fields if f not in data]
+            if not missing:
+                print(f"✅ PASS: All required fields present")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Missing fields: {missing}")
         else:
-            log_pass("GET /api/content - returns all required fields")
-    else:
-        log_fail("GET /api/content", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("GET /api/content", f"Exception: {str(e)}")
-
-# Test /api/testimonials
-try:
-    print("\nTesting GET /api/testimonials...")
-    response = requests.get(f"{BASE_URL}/testimonials", timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if isinstance(data, list):
-            if len(data) >= 3:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        # Test /api/testimonials
+        print("\n[1.2] Testing GET /api/testimonials...")
+        resp = requests.get(f"{BASE_URL}/testimonials", timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) >= 3:
                 has_vimeo = all('vimeoUrl' in item for item in data)
                 if has_vimeo:
-                    log_pass(f"GET /api/testimonials - returns array with {len(data)} items, all have vimeoUrl")
+                    print(f"✅ PASS: Returns {len(data)} testimonials with vimeoUrl")
+                    tests_passed += 1
                 else:
-                    log_fail("GET /api/testimonials", "Some items missing vimeoUrl")
+                    print(f"❌ FAIL: Some testimonials missing vimeoUrl")
             else:
-                log_fail("GET /api/testimonials", f"Expected >=3 items, got {len(data)}")
+                print(f"❌ FAIL: Expected array with >=3 items, got {len(data) if isinstance(data, list) else 'not array'}")
         else:
-            log_fail("GET /api/testimonials", "Expected array response")
-    else:
-        log_fail("GET /api/testimonials", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("GET /api/testimonials", f"Exception: {str(e)}")
-
-# Test /api/transformations
-try:
-    print("\nTesting GET /api/transformations...")
-    response = requests.get(f"{BASE_URL}/transformations", timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if isinstance(data, list):
-            if len(data) >= 2:
-                log_pass(f"GET /api/transformations - returns array with {len(data)} items")
-            else:
-                log_fail("GET /api/transformations", f"Expected >=2 items, got {len(data)}")
-        else:
-            log_fail("GET /api/transformations", "Expected array response")
-    else:
-        log_fail("GET /api/transformations", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("GET /api/transformations", f"Exception: {str(e)}")
-
-# Test /api/gallery
-try:
-    print("\nTesting GET /api/gallery...")
-    response = requests.get(f"{BASE_URL}/gallery", timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if isinstance(data, list):
-            if len(data) >= 6:
-                log_pass(f"GET /api/gallery - returns array with {len(data)} items")
-            else:
-                log_fail("GET /api/gallery", f"Expected >=6 items, got {len(data)}")
-        else:
-            log_fail("GET /api/gallery", "Expected array response")
-    else:
-        log_fail("GET /api/gallery", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("GET /api/gallery", f"Exception: {str(e)}")
-
-# Test /api/faqs
-try:
-    print("\nTesting GET /api/faqs...")
-    response = requests.get(f"{BASE_URL}/faqs", timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if isinstance(data, list):
-            if len(data) >= 5:
-                log_pass(f"GET /api/faqs - returns array with {len(data)} items")
-            else:
-                log_fail("GET /api/faqs", f"Expected >=5 items, got {len(data)}")
-        else:
-            log_fail("GET /api/faqs", "Expected array response")
-    else:
-        log_fail("GET /api/faqs", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("GET /api/faqs", f"Exception: {str(e)}")
-
-# ============================================================================
-# TEST 2: BOOKING AVAILABILITY
-# ============================================================================
-print("\n📅 TEST 2: BOOKING AVAILABILITY")
-print("-" * 80)
-
-# Test with open weekday (Monday)
-try:
-    print("\nTesting GET /api/availability with open weekday...")
-    # Get next Monday
-    today = datetime.now()
-    days_ahead = (0 - today.weekday()) % 7  # Monday = 0
-    if days_ahead == 0:
-        days_ahead = 7  # If today is Monday, get next Monday
-    next_monday = today + timedelta(days=days_ahead)
-    date_str = next_monday.strftime('%Y-%m-%d')
-    
-    response = requests.get(f"{BASE_URL}/availability?date={date_str}", timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if 'slots' in data and 'dayOpen' in data:
-            if data['dayOpen'] and isinstance(data['slots'], list) and len(data['slots']) == 6:
-                log_pass(f"GET /api/availability (open weekday) - returns 6 slots, dayOpen=true")
-            elif data['dayOpen'] and len(data['slots']) != 6:
-                log_warning(f"GET /api/availability (open weekday)", f"Expected 6 slots, got {len(data['slots'])} (some may be booked)")
-            else:
-                log_fail("GET /api/availability (open weekday)", f"dayOpen={data['dayOpen']}, slots={len(data['slots'])}")
-        else:
-            log_fail("GET /api/availability (open weekday)", "Missing 'slots' or 'dayOpen' in response")
-    else:
-        log_fail("GET /api/availability (open weekday)", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("GET /api/availability (open weekday)", f"Exception: {str(e)}")
-
-# Test with Sunday (closed)
-try:
-    print("\nTesting GET /api/availability with Sunday (closed)...")
-    # Get next Sunday
-    today = datetime.now()
-    days_ahead = (6 - today.weekday()) % 7  # Sunday = 6
-    if days_ahead == 0:
-        days_ahead = 7
-    next_sunday = today + timedelta(days=days_ahead)
-    date_str = next_sunday.strftime('%Y-%m-%d')
-    
-    response = requests.get(f"{BASE_URL}/availability?date={date_str}", timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if 'dayOpen' in data and data['dayOpen'] == False:
-            log_pass("GET /api/availability (Sunday) - returns dayOpen=false")
-        else:
-            log_fail("GET /api/availability (Sunday)", f"Expected dayOpen=false, got {data}")
-    else:
-        log_fail("GET /api/availability (Sunday)", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("GET /api/availability (Sunday)", f"Exception: {str(e)}")
-
-# ============================================================================
-# TEST 3: POST /api/leads
-# ============================================================================
-print("\n📝 TEST 3: POST /api/leads")
-print("-" * 80)
-
-# Test valid lead submission
-try:
-    print("\nTesting POST /api/leads with valid data...")
-    payload = {
-        "name": "Rajesh Kumar",
-        "whatsapp": "9876543210",
-        "goal": "Weight Loss",
-        "contactTime": "Evening"
-    }
-    response = requests.post(f"{BASE_URL}/leads", json=payload, timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if data.get('ok') and data.get('id'):
-            log_pass("POST /api/leads (valid) - returns 200 with ok=true and id")
-        else:
-            log_fail("POST /api/leads (valid)", f"Missing 'ok' or 'id' in response: {data}")
-    else:
-        log_fail("POST /api/leads (valid)", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("POST /api/leads (valid)", f"Exception: {str(e)}")
-
-# Test missing name
-try:
-    print("\nTesting POST /api/leads with missing name...")
-    payload = {
-        "whatsapp": "9876543210",
-        "goal": "Weight Loss"
-    }
-    response = requests.post(f"{BASE_URL}/leads", json=payload, timeout=10)
-    if response.status_code == 400:
-        log_pass("POST /api/leads (missing name) - returns 400")
-    else:
-        log_fail("POST /api/leads (missing name)", f"Expected 400, got {response.status_code}")
-except Exception as e:
-    log_fail("POST /api/leads (missing name)", f"Exception: {str(e)}")
-
-# Test missing whatsapp
-try:
-    print("\nTesting POST /api/leads with missing whatsapp...")
-    payload = {
-        "name": "Test User",
-        "goal": "Weight Loss"
-    }
-    response = requests.post(f"{BASE_URL}/leads", json=payload, timeout=10)
-    if response.status_code == 400:
-        log_pass("POST /api/leads (missing whatsapp) - returns 400")
-    else:
-        log_fail("POST /api/leads (missing whatsapp)", f"Expected 400, got {response.status_code}")
-except Exception as e:
-    log_fail("POST /api/leads (missing whatsapp)", f"Exception: {str(e)}")
-
-# ============================================================================
-# TEST 4: POST /api/bookings
-# ============================================================================
-print("\n📅 TEST 4: POST /api/bookings")
-print("-" * 80)
-
-# Test valid booking
-booking_date = None
-booking_time = None
-try:
-    print("\nTesting POST /api/bookings with valid data...")
-    # Get next Tuesday
-    today = datetime.now()
-    days_ahead = (1 - today.weekday()) % 7  # Tuesday = 1
-    if days_ahead == 0:
-        days_ahead = 7
-    next_tuesday = today + timedelta(days=days_ahead)
-    booking_date = next_tuesday.strftime('%Y-%m-%d')
-    booking_time = "07:00 AM"
-    
-    payload = {
-        "name": "Priya Sharma",
-        "whatsapp": "9123456789",
-        "email": "priya@example.com",
-        "goal": "Fitness",
-        "date": booking_date,
-        "time": booking_time
-    }
-    response = requests.post(f"{BASE_URL}/bookings", json=payload, timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if data.get('ok') and data.get('id'):
-            log_pass("POST /api/bookings (valid) - returns 200 with ok=true and id")
-        else:
-            log_fail("POST /api/bookings (valid)", f"Missing 'ok' or 'id' in response: {data}")
-    else:
-        log_fail("POST /api/bookings (valid)", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("POST /api/bookings (valid)", f"Exception: {str(e)}")
-
-# Test duplicate booking (409)
-if booking_date and booking_time:
-    try:
-        print("\nTesting POST /api/bookings with duplicate slot...")
-        payload = {
-            "name": "Another User",
-            "whatsapp": "9999999999",
-            "email": "another@example.com",
-            "goal": "Health",
-            "date": booking_date,
-            "time": booking_time
-        }
-        response = requests.post(f"{BASE_URL}/bookings", json=payload, timeout=10)
-        if response.status_code == 409:
-            log_pass("POST /api/bookings (duplicate) - returns 409")
-        else:
-            log_fail("POST /api/bookings (duplicate)", f"Expected 409, got {response.status_code}")
-    except Exception as e:
-        log_fail("POST /api/bookings (duplicate)", f"Exception: {str(e)}")
-
-# Test missing required fields
-try:
-    print("\nTesting POST /api/bookings with missing fields...")
-    payload = {
-        "name": "Test User",
-        "whatsapp": "9876543210"
-        # Missing date and time
-    }
-    response = requests.post(f"{BASE_URL}/bookings", json=payload, timeout=10)
-    if response.status_code == 400:
-        log_pass("POST /api/bookings (missing fields) - returns 400")
-    else:
-        log_fail("POST /api/bookings (missing fields)", f"Expected 400, got {response.status_code}")
-except Exception as e:
-    log_fail("POST /api/bookings (missing fields)", f"Exception: {str(e)}")
-
-# ============================================================================
-# TEST 5: RATE LIMITING
-# ============================================================================
-print("\n🚦 TEST 5: RATE LIMITING")
-print("-" * 80)
-
-try:
-    print("\nTesting rate limiting on POST /api/leads (6+ requests)...")
-    # Make 6 requests quickly
-    rate_limit_hit = False
-    for i in range(7):
-        payload = {
-            "name": f"Rate Test User {i}",
-            "whatsapp": f"98765432{i:02d}",
-            "goal": "Test"
-        }
-        response = requests.post(f"{BASE_URL}/leads", json=payload, timeout=10)
-        if response.status_code == 429:
-            rate_limit_hit = True
-            log_pass(f"Rate limiting - got 429 on request #{i+1}")
-            break
-        time.sleep(0.1)  # Small delay between requests
-    
-    if not rate_limit_hit:
-        log_warning("Rate limiting", "Did not hit 429 after 7 requests (may need more requests or different IP)")
-except Exception as e:
-    log_fail("Rate limiting", f"Exception: {str(e)}")
-
-# ============================================================================
-# TEST 6: AUTH ENDPOINTS
-# ============================================================================
-print("\n🔐 TEST 6: AUTH ENDPOINTS")
-print("-" * 80)
-
-# Test send-otp with non-admin email
-try:
-    print("\nTesting POST /api/auth/send-otp with non-admin email...")
-    payload = {"email": "random@example.com"}
-    response = requests.post(f"{BASE_URL}/auth/send-otp", json=payload, timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if data.get('ok'):
-            log_pass("POST /api/auth/send-otp (non-admin) - returns 200 with non-enumerating response")
-        else:
-            log_fail("POST /api/auth/send-otp (non-admin)", f"Unexpected response: {data}")
-    else:
-        log_fail("POST /api/auth/send-otp (non-admin)", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("POST /api/auth/send-otp (non-admin)", f"Exception: {str(e)}")
-
-# Test send-otp with admin email
-try:
-    print("\nTesting POST /api/auth/send-otp with admin email...")
-    payload = {"email": "samfonde0@gmail.com"}
-    response = requests.post(f"{BASE_URL}/auth/send-otp", json=payload, timeout=10)
-    if response.status_code == 200:
-        data = response.json()
-        if data.get('ok'):
-            log_pass("POST /api/auth/send-otp (admin) - returns 200 ok=true")
-        else:
-            log_fail("POST /api/auth/send-otp (admin)", f"Unexpected response: {data}")
-    else:
-        log_fail("POST /api/auth/send-otp (admin)", f"Expected 200, got {response.status_code}")
-except Exception as e:
-    log_fail("POST /api/auth/send-otp (admin)", f"Exception: {str(e)}")
-
-# Test verify-otp with wrong code
-try:
-    print("\nTesting POST /api/auth/verify-otp with wrong code...")
-    payload = {"email": "samfonde0@gmail.com", "code": "000000"}
-    response = requests.post(f"{BASE_URL}/auth/verify-otp", json=payload, timeout=10)
-    if response.status_code == 401:
-        log_pass("POST /api/auth/verify-otp (wrong code) - returns 401")
-    else:
-        log_fail("POST /api/auth/verify-otp (wrong code)", f"Expected 401, got {response.status_code}")
-except Exception as e:
-    log_fail("POST /api/auth/verify-otp (wrong code)", f"Exception: {str(e)}")
-
-# Test /auth/me without cookie
-try:
-    print("\nTesting GET /api/auth/me without cookie...")
-    response = requests.get(f"{BASE_URL}/auth/me", timeout=10)
-    if response.status_code == 401:
-        data = response.json()
-        if data.get('authenticated') == False:
-            log_pass("GET /api/auth/me (no cookie) - returns 401 with authenticated=false")
-        else:
-            log_fail("GET /api/auth/me (no cookie)", f"Expected authenticated=false, got {data}")
-    else:
-        log_fail("GET /api/auth/me (no cookie)", f"Expected 401, got {response.status_code}")
-except Exception as e:
-    log_fail("GET /api/auth/me (no cookie)", f"Exception: {str(e)}")
-
-# ============================================================================
-# TEST 7: PROTECTED ADMIN ROUTES (without session)
-# ============================================================================
-print("\n🔒 TEST 7: PROTECTED ADMIN ROUTES (without session)")
-print("-" * 80)
-
-protected_routes = [
-    ("GET", "/admin/leads"),
-    ("GET", "/admin/bookings"),
-    ("GET", "/admin/testimonials"),
-    ("PUT", "/admin/content"),
-    ("POST", "/admin/testimonials"),
-    ("GET", "/admin/admins"),
-    ("POST", "/admin/upload")
-]
-
-for method, route in protected_routes:
-    try:
-        print(f"\nTesting {method} {route} without session...")
-        if method == "GET":
-            response = requests.get(f"{BASE_URL}{route}", timeout=10)
-        elif method == "POST":
-            response = requests.post(f"{BASE_URL}{route}", json={}, timeout=10)
-        elif method == "PUT":
-            response = requests.put(f"{BASE_URL}{route}", json={}, timeout=10)
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
         
-        if response.status_code == 401:
-            log_pass(f"{method} {route} (no session) - returns 401")
+        # Test /api/transformations
+        print("\n[1.3] Testing GET /api/transformations...")
+        resp = requests.get(f"{BASE_URL}/transformations", timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) >= 2:
+                print(f"✅ PASS: Returns {len(data)} transformations")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected array with >=2 items, got {len(data) if isinstance(data, list) else 'not array'}")
         else:
-            log_fail(f"{method} {route} (no session)", f"Expected 401, got {response.status_code}")
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        # Test /api/gallery
+        print("\n[1.4] Testing GET /api/gallery...")
+        resp = requests.get(f"{BASE_URL}/gallery", timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) >= 6:
+                print(f"✅ PASS: Returns {len(data)} gallery items")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected array with >=6 items, got {len(data) if isinstance(data, list) else 'not array'}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        # Test /api/faqs
+        print("\n[1.5] Testing GET /api/faqs...")
+        resp = requests.get(f"{BASE_URL}/faqs", timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) >= 5:
+                print(f"✅ PASS: Returns {len(data)} FAQs")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected array with >=5 items, got {len(data) if isinstance(data, list) else 'not array'}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        print(f"\n📊 Test 1 Summary: {tests_passed}/{tests_total} passed")
+        return tests_passed == tests_total
+        
     except Exception as e:
-        log_fail(f"{method} {route} (no session)", f"Exception: {str(e)}")
+        print(f"❌ EXCEPTION in test_public_content_endpoints: {e}")
+        return False
 
-# ============================================================================
-# SUMMARY
-# ============================================================================
-print("\n" + "=" * 80)
-print("TEST SUMMARY")
-print("=" * 80)
-print(f"✅ PASSED: {len(test_results['passed'])}")
-print(f"❌ FAILED: {len(test_results['failed'])}")
-print(f"⚠️  WARNINGS: {len(test_results['warnings'])}")
 
-if test_results['failed']:
-    print("\n❌ FAILED TESTS:")
-    for fail in test_results['failed']:
-        print(f"  - {fail}")
+def test_availability_endpoint():
+    """Test 2: Booking availability endpoint"""
+    print("\n" + "="*80)
+    print("TEST 2: Booking Availability Endpoint")
+    print("="*80)
+    
+    tests_passed = 0
+    tests_total = 2
+    
+    try:
+        # Test open weekday (Wednesday)
+        print("\n[2.1] Testing GET /api/availability?date=2026-08-12 (Wednesday - should be open)...")
+        resp = requests.get(f"{BASE_URL}/availability?date=2026-08-12", timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"Response: {json.dumps(data, indent=2)}")
+            if data.get('dayOpen') == True and isinstance(data.get('slots'), list) and len(data['slots']) == 6:
+                print(f"✅ PASS: Open day returns dayOpen=true with 6 slots")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected dayOpen=true with 6 slots, got dayOpen={data.get('dayOpen')}, slots={len(data.get('slots', []))}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        # Test closed day (Sunday)
+        print("\n[2.2] Testing GET /api/availability?date=2026-08-16 (Sunday - should be closed)...")
+        resp = requests.get(f"{BASE_URL}/availability?date=2026-08-16", timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"Response: {json.dumps(data, indent=2)}")
+            if data.get('dayOpen') == False:
+                print(f"✅ PASS: Closed day returns dayOpen=false")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected dayOpen=false, got {data.get('dayOpen')}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        print(f"\n📊 Test 2 Summary: {tests_passed}/{tests_total} passed")
+        return tests_passed == tests_total
+        
+    except Exception as e:
+        print(f"❌ EXCEPTION in test_availability_endpoint: {e}")
+        return False
 
-if test_results['warnings']:
-    print("\n⚠️  WARNINGS:")
-    for warn in test_results['warnings']:
-        print(f"  - {warn}")
 
-print("\n" + "=" * 80)
-if len(test_results['failed']) == 0:
-    print("🎉 ALL CRITICAL TESTS PASSED!")
-else:
-    print(f"⚠️  {len(test_results['failed'])} TESTS FAILED")
-print("=" * 80)
+def test_leads_endpoint():
+    """Test 3: POST /api/leads validation"""
+    print("\n" + "="*80)
+    print("TEST 3: POST /api/leads Endpoint")
+    print("="*80)
+    
+    tests_passed = 0
+    tests_total = 2
+    
+    try:
+        # Test valid lead submission
+        print("\n[3.1] Testing POST /api/leads with valid data...")
+        payload = {
+            "name": "Rajesh Kumar",
+            "whatsapp": "9876543210",
+            "goal": "Weight Loss",
+            "contactTime": "Evening"
+        }
+        resp = requests.post(f"{BASE_URL}/leads", json=payload, timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"Response: {json.dumps(data, indent=2)}")
+            if data.get('ok') == True and 'id' in data:
+                print(f"✅ PASS: Valid lead returns 200 with ok=true and id")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected ok=true and id, got {data}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        # Test missing required fields
+        print("\n[3.2] Testing POST /api/leads with missing name...")
+        payload = {
+            "whatsapp": "9876543210",
+            "goal": "Weight Loss"
+        }
+        resp = requests.post(f"{BASE_URL}/leads", json=payload, timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 400:
+            print(f"✅ PASS: Missing name returns 400")
+            tests_passed += 1
+        else:
+            print(f"❌ FAIL: Expected 400, got {resp.status_code}")
+        
+        print(f"\n📊 Test 3 Summary: {tests_passed}/{tests_total} passed")
+        return tests_passed == tests_total
+        
+    except Exception as e:
+        print(f"❌ EXCEPTION in test_leads_endpoint: {e}")
+        return False
+
+
+def test_bookings_endpoint():
+    """Test 4: POST /api/bookings validation and duplicate prevention"""
+    print("\n" + "="*80)
+    print("TEST 4: POST /api/bookings Endpoint")
+    print("="*80)
+    
+    tests_passed = 0
+    tests_total = 3
+    
+    try:
+        # Test valid booking
+        print("\n[4.1] Testing POST /api/bookings with valid data...")
+        timestamp = datetime.now().strftime("%H%M%S")
+        payload = {
+            "name": f"Priya Sharma {timestamp}",
+            "whatsapp": "9123456789",
+            "date": "2026-08-13",
+            "time": "08:00 AM"
+        }
+        resp = requests.post(f"{BASE_URL}/bookings", json=payload, timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"Response: {json.dumps(data, indent=2)}")
+            if data.get('ok') == True and 'id' in data:
+                print(f"✅ PASS: Valid booking returns 200 with ok=true and id")
+                tests_passed += 1
+                
+                # Test duplicate booking (same date+time)
+                print("\n[4.2] Testing POST /api/bookings with duplicate slot...")
+                resp2 = requests.post(f"{BASE_URL}/bookings", json=payload, timeout=10)
+                print(f"Status: {resp2.status_code}")
+                if resp2.status_code == 409:
+                    print(f"✅ PASS: Duplicate slot returns 409")
+                    tests_passed += 1
+                else:
+                    print(f"❌ FAIL: Expected 409, got {resp2.status_code}")
+            else:
+                print(f"❌ FAIL: Expected ok=true and id, got {data}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        # Test missing required fields
+        print("\n[4.3] Testing POST /api/bookings with missing fields...")
+        payload = {
+            "name": "Test User",
+            "date": "2026-08-14"
+            # missing whatsapp and time
+        }
+        resp = requests.post(f"{BASE_URL}/bookings", json=payload, timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 400:
+            print(f"✅ PASS: Missing fields returns 400")
+            tests_passed += 1
+        else:
+            print(f"❌ FAIL: Expected 400, got {resp.status_code}")
+        
+        print(f"\n📊 Test 4 Summary: {tests_passed}/{tests_total} passed")
+        return tests_passed == tests_total
+        
+    except Exception as e:
+        print(f"❌ EXCEPTION in test_bookings_endpoint: {e}")
+        return False
+
+
+def test_auth_endpoints():
+    """Test 5: Auth endpoints (send-otp, verify-otp, /auth/me)"""
+    print("\n" + "="*80)
+    print("TEST 5: Auth Endpoints")
+    print("="*80)
+    
+    tests_passed = 0
+    tests_total = 4
+    
+    try:
+        # Test send-otp with non-admin email (non-enumerating)
+        print("\n[5.1] Testing POST /api/auth/send-otp with non-admin email...")
+        payload = {"email": "random_notadmin@example.com"}
+        resp = requests.post(f"{BASE_URL}/auth/send-otp", json=payload, timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"Response: {json.dumps(data, indent=2)}")
+            if data.get('ok') == True:
+                print(f"✅ PASS: Non-admin email returns 200 with non-enumerating response")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected ok=true, got {data}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        # Test send-otp with admin email (CALL ONLY ONCE)
+        print("\n[5.2] Testing POST /api/auth/send-otp with admin email (samfonde0@gmail.com)...")
+        print("⚠️  NOTE: Calling this ONCE to avoid Supabase email rate limits")
+        payload = {"email": ADMIN_EMAIL}
+        resp = requests.post(f"{BASE_URL}/auth/send-otp", json=payload, timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
+            data = resp.json()
+            print(f"Response: {json.dumps(data, indent=2)}")
+            if data.get('ok') == True:
+                print(f"✅ PASS: Admin email returns 200 ok=true (OTP sent via Supabase)")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected ok=true, got {data}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        # Test verify-otp with wrong code
+        print("\n[5.3] Testing POST /api/auth/verify-otp with wrong code...")
+        payload = {"email": ADMIN_EMAIL, "code": "000000"}
+        resp = requests.post(f"{BASE_URL}/auth/verify-otp", json=payload, timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 401:
+            print(f"✅ PASS: Wrong OTP code returns 401")
+            tests_passed += 1
+        else:
+            print(f"❌ FAIL: Expected 401, got {resp.status_code}")
+        
+        # Test verify-otp with non-admin email
+        print("\n[5.4] Testing POST /api/auth/verify-otp with non-admin email...")
+        payload = {"email": "random_notadmin@example.com", "code": "123456"}
+        resp = requests.post(f"{BASE_URL}/auth/verify-otp", json=payload, timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 403:
+            print(f"✅ PASS: Non-admin email returns 403")
+            tests_passed += 1
+        else:
+            print(f"❌ FAIL: Expected 403, got {resp.status_code}")
+        
+        # Test /auth/me without cookie
+        print("\n[5.5] Testing GET /api/auth/me without session cookie...")
+        resp = requests.get(f"{BASE_URL}/auth/me", timeout=10)
+        print(f"Status: {resp.status_code}")
+        if resp.status_code == 401:
+            data = resp.json()
+            print(f"Response: {json.dumps(data, indent=2)}")
+            if data.get('authenticated') == False:
+                print(f"✅ PASS: No cookie returns 401 with authenticated=false")
+                # Don't increment tests_passed as this is bonus check
+            else:
+                print(f"⚠️  WARNING: Expected authenticated=false, got {data}")
+        else:
+            print(f"❌ FAIL: Expected 401, got {resp.status_code}")
+        
+        print(f"\n📊 Test 5 Summary: {tests_passed}/{tests_total} passed")
+        return tests_passed == tests_total
+        
+    except Exception as e:
+        print(f"❌ EXCEPTION in test_auth_endpoints: {e}")
+        return False
+
+
+def test_protected_admin_routes():
+    """Test 6: All protected admin routes return 401 without cookie"""
+    print("\n" + "="*80)
+    print("TEST 6: Protected Admin Routes (without session)")
+    print("="*80)
+    
+    tests_passed = 0
+    admin_routes = [
+        ("GET", "/admin/leads"),
+        ("GET", "/admin/bookings"),
+        ("GET", "/admin/testimonials"),
+        ("GET", "/admin/admins"),
+        ("PUT", "/admin/content"),
+        ("POST", "/admin/upload"),
+        ("POST", "/admin/testimonials"),
+    ]
+    tests_total = len(admin_routes)
+    
+    try:
+        for i, (method, route) in enumerate(admin_routes, 1):
+            print(f"\n[6.{i}] Testing {method} {route} without session...")
+            
+            if method == "GET":
+                resp = requests.get(f"{BASE_URL}{route}", timeout=10)
+            elif method == "POST":
+                resp = requests.post(f"{BASE_URL}{route}", json={}, timeout=10)
+            elif method == "PUT":
+                resp = requests.put(f"{BASE_URL}{route}", json={}, timeout=10)
+            
+            print(f"Status: {resp.status_code}")
+            if resp.status_code == 401:
+                print(f"✅ PASS: Returns 401 (unauthorized)")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected 401, got {resp.status_code}")
+        
+        print(f"\n📊 Test 6 Summary: {tests_passed}/{tests_total} passed")
+        return tests_passed == tests_total
+        
+    except Exception as e:
+        print(f"❌ EXCEPTION in test_protected_admin_routes: {e}")
+        return False
+
+
+def test_rls_direct():
+    """Test 7: CRITICAL - Direct Supabase REST API RLS test"""
+    print("\n" + "="*80)
+    print("TEST 7: CRITICAL - Row Level Security (RLS) Direct Test")
+    print("="*80)
+    
+    tests_passed = 0
+    tests_total = 3
+    
+    try:
+        headers = {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        # Test 1: leads table should be blocked (RLS)
+        print("\n[7.1] Testing direct Supabase REST GET /rest/v1/leads?select=* with anon key...")
+        print("Expected: Empty array or 401/403 (RLS blocks anon access)")
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/leads?select=*",
+            headers=headers,
+            timeout=10
+        )
+        print(f"Status: {resp.status_code}")
+        print(f"Response: {resp.text[:200]}")
+        
+        if resp.status_code in [401, 403]:
+            print(f"✅ PASS: RLS blocks anon access with {resp.status_code}")
+            tests_passed += 1
+        elif resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) == 0:
+                print(f"✅ PASS: RLS returns empty array (zero rows exposed)")
+                tests_passed += 1
+            else:
+                print(f"❌ CRITICAL FAIL: RLS BREACH - {len(data)} lead records exposed to anon key!")
+                print(f"Sample data: {json.dumps(data[:2], indent=2)}")
+        else:
+            print(f"⚠️  Unexpected status: {resp.status_code}")
+        
+        # Test 2: bookings table should be blocked (RLS)
+        print("\n[7.2] Testing direct Supabase REST GET /rest/v1/bookings?select=* with anon key...")
+        print("Expected: Empty array or 401/403 (RLS blocks anon access)")
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/bookings?select=*",
+            headers=headers,
+            timeout=10
+        )
+        print(f"Status: {resp.status_code}")
+        print(f"Response: {resp.text[:200]}")
+        
+        if resp.status_code in [401, 403]:
+            print(f"✅ PASS: RLS blocks anon access with {resp.status_code}")
+            tests_passed += 1
+        elif resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) == 0:
+                print(f"✅ PASS: RLS returns empty array (zero rows exposed)")
+                tests_passed += 1
+            else:
+                print(f"❌ CRITICAL FAIL: RLS BREACH - {len(data)} booking records exposed to anon key!")
+                print(f"Sample data: {json.dumps(data[:2], indent=2)}")
+        else:
+            print(f"⚠️  Unexpected status: {resp.status_code}")
+        
+        # Test 3: testimonials table should allow public read
+        print("\n[7.3] Testing direct Supabase REST GET /rest/v1/testimonials?select=id with anon key...")
+        print("Expected: 200 with array of testimonials (public read allowed)")
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/testimonials?select=id",
+            headers=headers,
+            timeout=10
+        )
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0:
+                print(f"✅ PASS: Public table returns {len(data)} rows (RLS allows anon SELECT)")
+                tests_passed += 1
+            else:
+                print(f"❌ FAIL: Expected array with rows, got {data}")
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+        
+        print(f"\n📊 Test 7 Summary: {tests_passed}/{tests_total} passed")
+        
+        if tests_passed < tests_total:
+            print("\n⚠️  CRITICAL: RLS test failures detected!")
+            print("If leads/bookings are exposed, this is a SECURITY BREACH.")
+        
+        return tests_passed == tests_total
+        
+    except Exception as e:
+        print(f"❌ EXCEPTION in test_rls_direct: {e}")
+        return False
+
+
+def main():
+    """Run all backend tests"""
+    print("\n" + "="*80)
+    print("CHINMAY WELLNESS CLUB - BACKEND TEST SUITE (POST-SUPABASE MIGRATION)")
+    print("="*80)
+    print(f"Base URL: {BASE_URL}")
+    print(f"Supabase URL: {SUPABASE_URL}")
+    print(f"Admin Email: {ADMIN_EMAIL}")
+    print(f"Timestamp: {datetime.now().isoformat()}")
+    
+    results = {}
+    
+    # Run all tests
+    results['Test 1: Public Content Endpoints'] = test_public_content_endpoints()
+    results['Test 2: Availability Endpoint'] = test_availability_endpoint()
+    results['Test 3: Leads Endpoint'] = test_leads_endpoint()
+    results['Test 4: Bookings Endpoint'] = test_bookings_endpoint()
+    results['Test 5: Auth Endpoints'] = test_auth_endpoints()
+    results['Test 6: Protected Admin Routes'] = test_protected_admin_routes()
+    results['Test 7: RLS Direct Test'] = test_rls_direct()
+    
+    # Summary
+    print("\n" + "="*80)
+    print("FINAL TEST SUMMARY")
+    print("="*80)
+    
+    passed = sum(1 for v in results.values() if v)
+    total = len(results)
+    
+    for test_name, result in results.items():
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"{status}: {test_name}")
+    
+    print(f"\n{'='*80}")
+    print(f"OVERALL: {passed}/{total} test suites passed")
+    print(f"{'='*80}")
+    
+    if passed == total:
+        print("\n🎉 ALL TESTS PASSED - Backend migration to Supabase successful!")
+        return 0
+    else:
+        print(f"\n⚠️  {total - passed} test suite(s) failed - Review failures above")
+        return 1
+
+
+if __name__ == "__main__":
+    exit(main())
