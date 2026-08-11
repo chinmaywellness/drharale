@@ -539,6 +539,11 @@ function BookingSection({ content }) {
           <p className="text-brand-mint font-hindi font-semibold mb-1">{content.booking.subheading}</p>
           <h2 className="font-head font-extrabold text-2xl md:text-4xl">{content.booking.heading}</h2>
         </div>
+        {content.booking?.bannerImage && (
+          <div className="mb-8 rounded-2xl overflow-hidden shadow-lg aspect-video max-w-2xl mx-auto">
+            <img src={content.booking.bannerImage} alt="Current batch" className="w-full h-full object-cover" />
+          </div>
+        )}
         <Card className="p-6 md:p-8 rounded-3xl bg-white text-brand-charcoal">
           {done ? (
             <div className="text-center py-6">
