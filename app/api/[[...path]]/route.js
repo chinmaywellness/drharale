@@ -17,6 +17,9 @@ const svcC = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
 })
 
+// Startup config visibility (names/booleans only — never logs secret values)
+console.log('[CWC config] SUPABASE_URL:', !!SUPABASE_URL, '| ANON_KEY:', !!ANON_KEY, '| SERVICE_ROLE_KEY:', !!SERVICE_KEY, '| RESEND_API_KEY:', !!process.env.RESEND_API_KEY, '| ADMIN_EMAILS:', (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '(none)'))
+
 // ---------- Resend ----------
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = process.env.RESEND_FROM || 'Chinmay Wellness Club <onboarding@resend.dev>'
@@ -312,7 +315,7 @@ async function handleRoute(request, { params }) {
       if (!name || !whatsapp) return json({ error: 'Name and WhatsApp required' }, 400)
       const row = { name, whatsapp, email: clean(body.email, 120), goal: clean(body.goal, 60), preferred_time: clean(body.contactTime, 40), status: 'New' }
       const { data, error } = await svcC.from('leads').insert(row).select('id').single()
-      if (error) return json({ error: 'Could not save' }, 500)
+      if (error) { console.error('LEAD insert error:', error.code, '|', error.message, '|', error.details); return json({ error: 'Could not save' }, 500) }
       sendSubmissionEmails({ ...row, id: data.id, type: 'lead', contactTime: row.preferred_time })
       return json({ ok: true, id: data.id })
     }
@@ -329,6 +332,7 @@ async function handleRoute(request, { params }) {
       const row = { name, whatsapp, email: clean(body.email, 120), goal: clean(body.goal, 60), booking_date, slot, status: 'New' }
       const { data, error } = await svcC.from('bookings').insert(row).select('id').single()
       if (error) {
+        console.error('BOOKING insert error:', error.code, '|', error.message, '|', error.details, '|', error.hint)
         if (error.code === '23505') return json({ error: 'Slot just got booked, choose another' }, 409)
         return json({ error: 'Could not save' }, 500)
       }
@@ -343,9 +347,17 @@ async function handleRoute(request, { params }) {
       const email = clean(body.email, 120).toLowerCase()
       if (!email.includes('@')) return json({ error: 'Valid email required' }, 400)
       if (!(await isAdminEmail(email))) return json({ ok: true, message: 'If eligible, an OTP was sent.' })
-      const { error } = await anonC.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
-      if (error) { console.error('send-otp error', error.message); return json({ error: 'Unable to send OTP' }, 400) }
-      return json({ ok: true, message: 'OTP sent to your email.' })
+      try {
+        const { error } = await anonC.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
+        if (error) {
+          console.error('SEND-OTP supabase error:', error.status, '|', error.message)
+          return json({ error: 'Unable to send OTP right now. Please try again shortly.' }, 400)
+        }
+        return json({ ok: true, message: 'OTP sent to your email.' })
+      } catch (e) {
+        console.error('SEND-OTP threw:', e?.message, '|', e?.stack)
+        return json({ error: 'Unable to send OTP right now. Please try again shortly.' }, 400)
+      }
     }
 
     if (route === '/auth/verify-otp' && method === 'POST') {
@@ -354,10 +366,18 @@ async function handleRoute(request, { params }) {
       const token = clean(body.code, 10)
       if (!email.includes('@') || !/^\d{6}$/.test(token)) return json({ error: 'Email and 6-digit OTP required' }, 400)
       if (!(await isAdminEmail(email))) return json({ error: 'Not authorized' }, 403)
-      const { data, error } = await anonC.auth.verifyOtp({ email, token, type: 'email' })
-      if (error || !data?.session) return json({ error: 'Invalid or expired OTP' }, 401)
-      const res = json({ ok: true, email })
-      return setSession(res, data.session)
+      try {
+        const { data, error } = await anonC.auth.verifyOtp({ email, token, type: 'email' })
+        if (error || !data?.session) {
+          console.error('VERIFY-OTP error:', error?.status, '|', error?.message)
+          return json({ error: 'Invalid or expired OTP' }, 401)
+        }
+        const res = json({ ok: true, email })
+        return setSession(res, data.session)
+      } catch (e) {
+        console.error('VERIFY-OTP threw:', e?.message)
+        return json({ error: 'Invalid or expired OTP' }, 401)
+      }
     }
 
     if (route === '/auth/logout' && method === 'POST') {
