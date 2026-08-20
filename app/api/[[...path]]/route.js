@@ -78,7 +78,8 @@ async function isAdminEmail(email) {
   if (!email) return false
   const e = email.toLowerCase()
   if (envAdmins().includes(e)) return true
-  const { data } = await svcC.from('admins').select('email').eq('email', e).maybeSingle()
+  const { data, error } = await svcC.from('admins').select('email').eq('email', e).maybeSingle()
+  if (error) console.error(`isAdminEmail: DB check failed for ${e} — ${error.message} (is 'admins' table missing? run supabase/migration.sql)`)
   return Boolean(data)
 }
 async function requireAdmin(request) {
@@ -364,7 +365,13 @@ async function handleRoute(request, { params }) {
       const body = await request.json()
       const email = clean(body.email, 120).toLowerCase()
       if (!email.includes('@')) return json({ error: 'Valid email required' }, 400)
-      if (!(await isAdminEmail(email))) return json({ ok: true, message: 'If eligible, an OTP was sent.' })
+      if (!(await isAdminEmail(email))) {
+        // NOTE: we return the same {ok:true} response as a real send so an
+        // attacker can't tell which emails are admins by probing this route.
+        // The real reason is only logged server-side (check Hostinger logs).
+        console.log(`send-otp: ${email} is NOT in the admin allowlist — no email sent`)
+        return json({ ok: true, message: 'If eligible, an OTP was sent.' })
+      }
       // Ask Supabase Auth to GENERATE the OTP only (no Supabase email is sent —
       // this is the official way to bypass Supabase's SMTP/rate limits and use
       // your own email provider instead). We then send it ourselves via Resend.
