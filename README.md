@@ -34,9 +34,19 @@ See `.env.example`. Required:
 Run `supabase/migration.sql` against the project — either in the **Supabase Dashboard → SQL Editor**, or via the Management API / `psql "$SUPABASE_DB_CONNECTION_STRING"`. It creates all tables, enables RLS + policies, seeds the admin, and creates the public `site-images` storage bucket.
 
 Then in the Supabase Dashboard:
-- **Authentication → Providers → Email**: enable Email OTP, set OTP expiry to 15 min. For reliable delivery, set **custom SMTP = Resend**.
-- **Authentication → URL Configuration**: Site URL = `https://chinmaywellnessclub.in` (add as allowed redirect URL too).
-- **Auth → Email Templates → Magic Link/OTP**: ensure the template contains `{{ .Token }}` so a 6-digit code is sent (not only a link).
+- **Authentication → Providers → Email**: keep Email provider enabled (this is required for the OTP token to be generated at all). Custom SMTP is **not** needed — see below.
+- **Authentication → URL Configuration**: Site URL = your deployed domain (add as allowed redirect URL too).
+
+### OTP delivery: Resend directly, not Supabase SMTP
+`/api/auth/send-otp` uses `supabase.auth.admin.generateLink({ type: 'magiclink' })`
+to get a 6-digit `email_otp` from Supabase **without Supabase sending any
+email** — Supabase's built-in mailer/SMTP is bypassed entirely. The app then
+emails that code itself via the Resend API (`sendOtpEmail` in
+`app/api/[[...path]]/route.js`). This avoids Supabase's default email rate
+limits and the extra step of configuring SMTP. `/api/auth/verify-otp` still
+verifies through Supabase Auth (`verifyOtp({ type: 'email' })`), so sessions
+and the admin allowlist work exactly as before — only the sending path
+changed.
 
 ## Local development
 ```bash

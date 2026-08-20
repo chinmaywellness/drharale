@@ -22,7 +22,13 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = process.env.RESEND_FROM || 'Chinmay Wellness Club <onboarding@resend.dev>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ''
 
-// ---------- cookies ----------
+// ---------- admin session (Supabase Auth session, delivered via cookies) ----------
+// NOTE: we still use Supabase Auth to GENERATE + VERIFY the OTP (so all the
+// session/security machinery stays Supabase-managed) — we've only removed
+// Supabase's own SMTP as the email *delivery* step and replaced it with a
+// direct Resend API call (see sendOtpEmail below). This fixes "Unable to
+// send OTP" caused by Supabase's slow/rate-limited built-in email sender,
+// without giving up Supabase-managed sessions.
 const AT = 'cwc_at'
 const RT = 'cwc_rt'
 const cookieBase = { httpOnly: true, secure: true, sameSite: 'lax', path: '/' }
@@ -252,6 +258,22 @@ async function getList(collKey) {
   return data.map(c.toApi)
 }
 
+// ---------- OTP email (sent directly via Resend — NOT via Supabase SMTP) ----------
+async function sendOtpEmail(email, otp) {
+  if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured')
+  await resend.emails.send({
+    from: FROM,
+    to: [email],
+    subject: `${otp} — आपका Admin Login OTP`,
+    html: `<div style="font-family:Inter,Arial,sans-serif;max-width:420px;margin:0 auto">
+      <h2 style="color:#0F6B4C;margin-bottom:4px">Chinmay Wellness Club — Admin Login</h2>
+      <p style="color:#555">आपका one-time login code:</p>
+      <div style="font-size:32px;font-weight:800;letter-spacing:0.3em;color:#0F6B4C;background:#F3FBF7;padding:16px 0;text-align:center;border-radius:12px;margin:16px 0">${otp}</div>
+      <p style="color:#888;font-size:13px">यह code 60 मिनट के लिए valid है। अगर आपने यह request नहीं किया, तो इस email को ignore करें।</p>
+    </div>`,
+  })
+}
+
 // ---------- emails ----------
 async function sendSubmissionEmails(item) {
   if (!process.env.RESEND_API_KEY) return
@@ -343,8 +365,22 @@ async function handleRoute(request, { params }) {
       const email = clean(body.email, 120).toLowerCase()
       if (!email.includes('@')) return json({ error: 'Valid email required' }, 400)
       if (!(await isAdminEmail(email))) return json({ ok: true, message: 'If eligible, an OTP was sent.' })
-      const { error } = await anonC.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
-      if (error) { console.error('send-otp error', error.message); return json({ error: 'Unable to send OTP' }, 400) }
+      // Ask Supabase Auth to GENERATE the OTP only (no Supabase email is sent —
+      // this is the official way to bypass Supabase's SMTP/rate limits and use
+      // your own email provider instead). We then send it ourselves via Resend.
+      const { data, error } = await svcC.auth.admin.generateLink({
+        type: 'magiclink',
+        email,
+        options: { shouldCreateUser: true },
+      })
+      const otp = data?.properties?.email_otp
+      if (error || !otp) { console.error('generateLink error', error?.message); return json({ error: 'Unable to send OTP' }, 400) }
+      try {
+        await sendOtpEmail(email, otp)
+      } catch (e) {
+        console.error('resend send-otp error', e?.message)
+        return json({ error: 'Unable to send OTP' }, 400)
+      }
       return json({ ok: true, message: 'OTP sent to your email.' })
     }
 

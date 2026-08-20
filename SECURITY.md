@@ -31,6 +31,6 @@ This document summarises the security measures implemented in this application.
 - HTTPS is enforced by the host; cookies are `Secure`.
 
 ## Notes / recommendations
-- Configure a custom SMTP provider (e.g. Resend) inside Supabase Auth for reliable OTP email delivery in production (the built-in email service is rate-limited).
+- OTP emails are sent directly via the Resend API (not Supabase's built-in mailer/SMTP) — `supabase.auth.admin.generateLink` generates the code only, `resend.emails.send` delivers it. This sidesteps Supabase's default email rate limits.
 - Verify the sending domain in Resend and switch `RESEND_FROM` to `no-reply@chinmaywellnessclub.in` so customer confirmation emails deliver to any recipient.
 - Rotate any credential that was ever shared in plain text.
