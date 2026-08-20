@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,23 +23,61 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = process.env.RESEND_FROM || 'Chinmay Wellness Club <onboarding@resend.dev>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ''
 
-// ---------- admin session (Supabase Auth session, delivered via cookies) ----------
-// NOTE: we still use Supabase Auth to GENERATE + VERIFY the OTP (so all the
-// session/security machinery stays Supabase-managed) — we've only removed
-// Supabase's own SMTP as the email *delivery* step and replaced it with a
-// direct Resend API call (see sendOtpEmail below). This fixes "Unable to
-// send OTP" caused by Supabase's slow/rate-limited built-in email sender,
-// without giving up Supabase-managed sessions.
-const AT = 'cwc_at'
-const RT = 'cwc_rt'
+// ---------- admin session (custom signed cookie — no Supabase Auth) ----------
+// Login is now email + password. Passwords are hashed with scrypt (Node's
+// built-in crypto, no extra dependency, no native bindings to break on
+// Hostinger). Session is a signed cookie (HMAC-SHA256), not a Supabase Auth
+// session — simpler and removes the Supabase Auth/OTP/SMTP dependency
+// entirely for admin login.
+const SESSION_COOKIE = 'cwc_sess'
+const SESSION_SECRET = process.env.SESSION_SECRET || ''
+const SESSION_MAX_AGE = 60 * 60 * 24 * 30 // 30 days
 const cookieBase = { httpOnly: true, secure: true, sameSite: 'lax', path: '/' }
-function setSession(res, session) {
-  res.cookies.set(AT, session.access_token, { ...cookieBase, maxAge: session.expires_in || 3600 })
-  if (session.refresh_token) res.cookies.set(RT, session.refresh_token, { ...cookieBase, maxAge: 60 * 60 * 24 * 30 })
+
+function b64url(str) { return Buffer.from(str).toString('base64url') }
+function signPayload(payloadB64) {
+  return crypto.createHmac('sha256', SESSION_SECRET).update(payloadB64).digest('base64url')
+}
+function createSessionToken(email) {
+  const payloadB64 = b64url(JSON.stringify({ email, exp: Date.now() + SESSION_MAX_AGE * 1000 }))
+  return `${payloadB64}.${signPayload(payloadB64)}`
+}
+function readSessionToken(token) {
+  if (!token || !SESSION_SECRET) return null
+  const [payloadB64, sig] = token.split('.')
+  if (!payloadB64 || !sig) return null
+  const expected = signPayload(payloadB64)
+  const a = Buffer.from(sig), b = Buffer.from(expected)
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
+  try {
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'))
+    if (!payload?.email || !payload?.exp || payload.exp < Date.now()) return null
+    return payload
+  } catch { return null }
+}
+function setSession(res, email) {
+  res.cookies.set(SESSION_COOKIE, createSessionToken(email), { ...cookieBase, maxAge: SESSION_MAX_AGE })
   return res
 }
 function clearSession(res) {
-  res.cookies.delete(AT); res.cookies.delete(RT); return res
+  res.cookies.delete(SESSION_COOKIE)
+  res.cookies.delete('cwc_at'); res.cookies.delete('cwc_rt') // clean up old OTP-era cookies
+  return res
+}
+
+// ---------- password hashing (scrypt, built into Node — no extra package) ----------
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
+function verifyPassword(password, stored) {
+  if (!password || !stored || !stored.includes(':')) return false
+  const [salt, hashHex] = stored.split(':')
+  const hashBuf = Buffer.from(hashHex, 'hex')
+  const testBuf = crypto.scryptSync(password, salt, 64)
+  if (hashBuf.length !== testBuf.length) return false
+  return crypto.timingSafeEqual(hashBuf, testBuf)
 }
 
 // ---------- helpers ----------
@@ -83,12 +122,11 @@ async function isAdminEmail(email) {
   return Boolean(data)
 }
 async function requireAdmin(request) {
-  const at = request.cookies.get(AT)?.value
-  if (!at) return null
-  const { data, error } = await svcC.auth.getUser(at)
-  if (error || !data?.user?.email) return null
-  if (!(await isAdminEmail(data.user.email))) return null
-  return { email: data.user.email }
+  const token = request.cookies.get(SESSION_COOKIE)?.value
+  const payload = readSessionToken(token)
+  if (!payload?.email) return null
+  if (!(await isAdminEmail(payload.email))) return null
+  return { email: payload.email }
 }
 
 // ---------- images ----------
@@ -259,22 +297,6 @@ async function getList(collKey) {
   return data.map(c.toApi)
 }
 
-// ---------- OTP email (sent directly via Resend — NOT via Supabase SMTP) ----------
-async function sendOtpEmail(email, otp) {
-  if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured')
-  await resend.emails.send({
-    from: FROM,
-    to: [email],
-    subject: `${otp} — आपका Admin Login OTP`,
-    html: `<div style="font-family:Inter,Arial,sans-serif;max-width:420px;margin:0 auto">
-      <h2 style="color:#0F6B4C;margin-bottom:4px">Chinmay Wellness Club — Admin Login</h2>
-      <p style="color:#555">आपका one-time login code:</p>
-      <div style="font-size:32px;font-weight:800;letter-spacing:0.3em;color:#0F6B4C;background:#F3FBF7;padding:16px 0;text-align:center;border-radius:12px;margin:16px 0">${otp}</div>
-      <p style="color:#888;font-size:13px">यह code 60 मिनट के लिए valid है। अगर आपने यह request नहीं किया, तो इस email को ignore करें।</p>
-    </div>`,
-  })
-}
-
 // ---------- emails ----------
 async function sendSubmissionEmails(item) {
   if (!process.env.RESEND_API_KEY) return
@@ -359,48 +381,23 @@ async function handleRoute(request, { params }) {
       return json({ ok: true, id: data.id })
     }
 
-    // ===== AUTH (Supabase Auth OTP) =====
-    if (route === '/auth/send-otp' && method === 'POST') {
-      if (!rateLimit(`otp:${ip}`, 5, 10 * 60 * 1000)) return json({ error: 'Too many OTP requests. Try later.' }, 429)
+    // ===== AUTH (email + password) =====
+    if (route === '/auth/login' && method === 'POST') {
+      if (!rateLimit(`login:${ip}`, 8, 10 * 60 * 1000)) return json({ error: 'Too many attempts. Try again later.' }, 429)
+      if (!SESSION_SECRET) { console.error('SESSION_SECRET is not set'); return json({ error: 'Server not configured' }, 500) }
       const body = await request.json()
       const email = clean(body.email, 120).toLowerCase()
-      if (!email.includes('@')) return json({ error: 'Valid email required' }, 400)
-      if (!(await isAdminEmail(email))) {
-        // NOTE: we return the same {ok:true} response as a real send so an
-        // attacker can't tell which emails are admins by probing this route.
-        // The real reason is only logged server-side (check Hostinger logs).
-        console.log(`send-otp: ${email} is NOT in the admin allowlist — no email sent`)
-        return json({ ok: true, message: 'If eligible, an OTP was sent.' })
-      }
-      // Ask Supabase Auth to GENERATE the OTP only (no Supabase email is sent —
-      // this is the official way to bypass Supabase's SMTP/rate limits and use
-      // your own email provider instead). We then send it ourselves via Resend.
-      const { data, error } = await svcC.auth.admin.generateLink({
-        type: 'magiclink',
-        email,
-        options: { shouldCreateUser: true },
-      })
-      const otp = data?.properties?.email_otp
-      if (error || !otp) { console.error('generateLink error', error?.message); return json({ error: 'Unable to send OTP' }, 400) }
-      try {
-        await sendOtpEmail(email, otp)
-      } catch (e) {
-        console.error('resend send-otp error', e?.message)
-        return json({ error: 'Unable to send OTP' }, 400)
-      }
-      return json({ ok: true, message: 'OTP sent to your email.' })
-    }
+      const password = typeof body.password === 'string' ? body.password : ''
+      if (!email.includes('@') || !password) return json({ error: 'Email and password required' }, 400)
 
-    if (route === '/auth/verify-otp' && method === 'POST') {
-      const body = await request.json()
-      const email = clean(body.email, 120).toLowerCase()
-      const token = clean(body.code, 10)
-      if (!email.includes('@') || !/^\d{6}$/.test(token)) return json({ error: 'Email and 6-digit OTP required' }, 400)
-      if (!(await isAdminEmail(email))) return json({ error: 'Not authorized' }, 403)
-      const { data, error } = await anonC.auth.verifyOtp({ email, token, type: 'email' })
-      if (error || !data?.session) return json({ error: 'Invalid or expired OTP' }, 401)
+      const { data: row, error } = await svcC.from('admins').select('email, password_hash').eq('email', email).maybeSingle()
+      if (error) console.error(`login: DB check failed for ${email} — ${error.message} (is 'admins' table missing 'password_hash'? run supabase/migration.sql)`)
+      if (!row || !row.password_hash || !verifyPassword(password, row.password_hash)) {
+        console.log(`login: failed attempt for ${email}`)
+        return json({ error: 'Invalid email or password' }, 401)
+      }
       const res = json({ ok: true, email })
-      return setSession(res, data.session)
+      return setSession(res, email)
     }
 
     if (route === '/auth/logout' && method === 'POST') {
@@ -408,20 +405,8 @@ async function handleRoute(request, { params }) {
     }
 
     if (route === '/auth/me' && method === 'GET') {
-      const at = request.cookies.get(AT)?.value
-      if (at) {
-        const { data } = await svcC.auth.getUser(at)
-        if (data?.user?.email && (await isAdminEmail(data.user.email))) {
-          return json({ authenticated: true, email: data.user.email })
-        }
-      }
-      const rt = request.cookies.get(RT)?.value
-      if (rt) {
-        const { data, error } = await svcC.auth.refreshSession({ refresh_token: rt })
-        if (!error && data?.session && data.user?.email && (await isAdminEmail(data.user.email))) {
-          return setSession(json({ authenticated: true, email: data.user.email }), data.session)
-        }
-      }
+      const admin = await requireAdmin(request)
+      if (admin) return json({ authenticated: true, email: admin.email })
       return json({ authenticated: false }, 401)
     }
 
@@ -502,14 +487,45 @@ async function handleRoute(request, { params }) {
       if (route === '/admin/admins' && method === 'POST') {
         const body = await request.json()
         const email = clean(body.email, 120).toLowerCase()
+        const password = typeof body.password === 'string' ? body.password : ''
         if (!email.includes('@')) return json({ error: 'Valid email required' }, 400)
-        await svcC.from('admins').upsert({ email }, { onConflict: 'email' })
+        if (password.length < 8) return json({ error: 'Password must be at least 8 characters' }, 400)
+        const password_hash = hashPassword(password)
+        const { error } = await svcC.from('admins').insert({ email, password_hash })
+        if (error) {
+          if (error.code === '23505') return json({ error: 'This email is already an admin' }, 409)
+          console.error('add admin error', error.message)
+          return json({ error: 'Could not add admin' }, 400)
+        }
         return json({ ok: true })
       }
-      const adminDel = route.match(/^\/admin\/admins\/(.+)$/)
+      // change an existing admin's password
+      const pwMatch = route.match(/^\/admin\/admins\/([^/]+)\/password$/)
+      if (pwMatch && method === 'PUT') {
+        const email = decodeURIComponent(pwMatch[1]).toLowerCase()
+        const body = await request.json()
+        const password = typeof body.password === 'string' ? body.password : ''
+        if (password.length < 8) return json({ error: 'Password must be at least 8 characters' }, 400)
+        const password_hash = hashPassword(password)
+        const { data, error } = await svcC.from('admins').update({ password_hash }).eq('email', email).select('email')
+        if (error) { console.error('change password error', error.message); return json({ error: 'Could not update password' }, 400) }
+        if (!data?.length) {
+          // env-listed admin with no DB row yet (e.g. first-ever password set) — create it
+          if (envAdmins().includes(email)) {
+            const { error: insErr } = await svcC.from('admins').insert({ email, password_hash })
+            if (insErr) { console.error('create admin on password-set error', insErr.message); return json({ error: 'Could not update password' }, 400) }
+          } else {
+            return json({ error: 'Admin not found' }, 404)
+          }
+        }
+        return json({ ok: true })
+      }
+      const adminDel = route.match(/^\/admin\/admins\/([^/]+)$/)
       if (adminDel && method === 'DELETE') {
         const email = decodeURIComponent(adminDel[1]).toLowerCase()
         if (envAdmins().includes(email)) return json({ error: 'Primary admin cannot be removed' }, 400)
+        const { count } = await svcC.from('admins').select('email', { count: 'exact', head: true })
+        if ((count || 0) <= 1 && envAdmins().length === 0) return json({ error: 'Cannot remove the last remaining admin' }, 400)
         await svcC.from('admins').delete().eq('email', email)
         return json({ ok: true })
       }

@@ -33,20 +33,21 @@ See `.env.example`. Required:
 ## Database setup (one time)
 Run `supabase/migration.sql` against the project — either in the **Supabase Dashboard → SQL Editor**, or via the Management API / `psql "$SUPABASE_DB_CONNECTION_STRING"`. It creates all tables, enables RLS + policies, seeds the admin, and creates the public `site-images` storage bucket.
 
-Then in the Supabase Dashboard:
-- **Authentication → Providers → Email**: keep Email provider enabled (this is required for the OTP token to be generated at all). Custom SMTP is **not** needed — see below.
-- **Authentication → URL Configuration**: Site URL = your deployed domain (add as allowed redirect URL too).
+Then in the Supabase Dashboard, no Auth setup is needed anymore — admin login
+is email + password, handled entirely by this app (see below), not Supabase
+Auth.
 
-### OTP delivery: Resend directly, not Supabase SMTP
-`/api/auth/send-otp` uses `supabase.auth.admin.generateLink({ type: 'magiclink' })`
-to get a 6-digit `email_otp` from Supabase **without Supabase sending any
-email** — Supabase's built-in mailer/SMTP is bypassed entirely. The app then
-emails that code itself via the Resend API (`sendOtpEmail` in
-`app/api/[[...path]]/route.js`). This avoids Supabase's default email rate
-limits and the extra step of configuring SMTP. `/api/auth/verify-otp` still
-verifies through Supabase Auth (`verifyOtp({ type: 'email' })`), so sessions
-and the admin allowlist work exactly as before — only the sending path
-changed.
+### Admin login: email + password (not Supabase Auth, not OTP)
+`/api/auth/login` checks the submitted password against `admins.password_hash`
+in Postgres (hashed with Node's built-in `scrypt`, no plaintext ever stored),
+then issues a signed session cookie (HMAC-SHA256, `SESSION_SECRET` env var —
+**required**, see `.env.example`). This has no dependency on Supabase Auth,
+SMTP, or email delivery at all. Logged-in admins can add new admins and
+change any admin's password from the **Admins** tab in `/admin`.
+
+The first admin (`samfonde0@gmail.com`) is seeded by `supabase/migration.sql`
+with a password hash for the password you were given out-of-band — change it
+from the Admins tab after first login for good hygiene.
 
 ## Local development
 ```bash

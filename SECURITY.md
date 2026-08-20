@@ -16,14 +16,16 @@ This document summarises the security measures implemented in this application.
 - `bookings` has a UNIQUE constraint on `(booking_date, slot)` to prevent double-booking at the database level.
 
 ## Authentication (admin panel)
-- Uses Supabase Auth native email OTP (`signInWithOtp` / `verifyOtp`) — no custom OTP logic.
-- Only allow-listed admin emails (env `ADMIN_EMAILS` + the `admins` table) can receive an OTP; response is non-enumerating for non-admins.
-- Session tokens (access + refresh) are stored in HttpOnly, Secure, SameSite=Lax cookies. Access token is re-validated server-side via `supabase.auth.getUser()` on every protected request; expired sessions are refreshed via the refresh token.
-- Every `/api/admin/*` route verifies a valid admin session server-side before any read/write. Unauthenticated requests receive `401`.
+- Email + password, checked entirely by this app — no Supabase Auth, no OTP, no SMTP dependency.
+- Passwords are hashed with Node's built-in `scrypt` (random 16-byte salt per password, 64-byte derived key, constant-time comparison on verify). Plaintext passwords are never stored or logged.
+- On successful login, a session is a signed cookie (HMAC-SHA256 over `{email, exp}`, keyed by the server-only `SESSION_SECRET` env var) — HttpOnly, Secure, SameSite=Lax, 30-day expiry. `SESSION_SECRET` must be set or admin login is refused (fails closed, not open).
+- `POST /api/auth/login` is rate-limited (8 attempts / 10 min / IP) and returns a generic "Invalid email or password" either way — it never reveals whether the email exists.
+- Every `/api/admin/*` route re-verifies the session cookie's signature, expiry, and that the email is still a recognised admin (env allowlist or `admins` table) before any read/write. Unauthenticated or tampered-cookie requests receive `401`.
+- Admins can add new admins and change any admin's password from the Admins tab (`PUT /api/admin/admins/:email/password`, `POST /api/admin/admins`) — both require an authenticated admin session and enforce an 8-character minimum password length. The last remaining admin (and any `ADMIN_EMAILS`-listed "primary" admin) cannot be deleted, to prevent total lockout.
 
 ## Input validation & abuse protection
-- All public form inputs (leads, bookings, OTP) are validated and sanitised server-side (length limits, control-char stripping, required-field checks) — not just client-side.
-- Rate limiting on `POST /api/leads`, `POST /api/bookings` (5 / minute / IP) and `POST /api/auth/send-otp` (5 / 10 min / IP).
+- All public form inputs (leads, bookings, login) are validated and sanitised server-side (length limits, control-char stripping, required-field checks) — not just client-side.
+- Rate limiting on `POST /api/leads`, `POST /api/bookings` (5 / minute / IP) and `POST /api/auth/login` (8 / 10 min / IP).
 - File uploads to the `site-images` storage bucket are validated server-side for MIME type (jpeg/png/webp/gif) and size (<= 6 MB) before upload.
 
 ## Transport & CORS
@@ -31,6 +33,6 @@ This document summarises the security measures implemented in this application.
 - HTTPS is enforced by the host; cookies are `Secure`.
 
 ## Notes / recommendations
-- OTP emails are sent directly via the Resend API (not Supabase's built-in mailer/SMTP) — `supabase.auth.admin.generateLink` generates the code only, `resend.emails.send` delivers it. This sidesteps Supabase's default email rate limits.
-- Verify the sending domain in Resend and switch `RESEND_FROM` to `no-reply@chinmaywellnessclub.in` so customer confirmation emails deliver to any recipient.
+- Verify the sending domain in Resend and switch `RESEND_FROM` to your production domain once registered, so customer confirmation emails deliver reliably.
 - Rotate any credential that was ever shared in plain text.
+- `SESSION_SECRET` must be a long random value and must stay stable across deploys/restarts (rotating it invalidates every admin's session — that's expected, not a bug).

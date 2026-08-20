@@ -50,10 +50,19 @@ create table if not exists public.bookings (
 create table if not exists public.admins (
   id uuid primary key default gen_random_uuid(),
   email text unique not null,
+  password_hash text,
   created_at timestamptz default now()
 );
+-- upgrading an older DB that already has this table without password_hash:
+alter table public.admins add column if not exists password_hash text;
 
-insert into public.admins (email) values ('samfonde0@gmail.com') on conflict (email) do nothing;
+-- Seed/confirm the first admin. Password hash below is for '#Sam@5080'
+-- (scrypt, salt:hash hex — matches hashPassword() in app/api/[[...path]]/route.js).
+-- Safe to re-run: if the row exists with a password already set (e.g. changed
+-- via the admin UI), this does NOT overwrite it — only fills it in if empty.
+insert into public.admins (email, password_hash)
+values ('samfonde0@gmail.com', '32a975508b029adf34b6d9a59b62fe45:f595869b18667f034663622a08cdcca3f0a1b60d9c18060ef2d74f54a40747272472a8be3219bc67f27b19ebeec4eb8bd9235208b689b8529d8f125ba788c2e7')
+on conflict (email) do update set password_hash = coalesce(public.admins.password_hash, excluded.password_hash);
 
 -- ================= RLS =================
 alter table public.site_content enable row level security;

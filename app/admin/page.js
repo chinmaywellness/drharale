@@ -37,22 +37,13 @@ export default function AdminPage() {
 /* ---------------- Login ---------------- */
 function Login({ onSuccess }) {
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const send = async () => {
+  const login = async () => {
     setBusy(true)
     try {
-      await api('/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
-      setSent(true); toast.success('अगर यह admin email है, तो OTP भेजा गया है।')
-    } catch (e) { toast.error(e.message) }
-    setBusy(false)
-  }
-  const verify = async () => {
-    setBusy(true)
-    try {
-      await api('/auth/verify-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code }) })
+      await api('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
       toast.success('Welcome!'); onSuccess()
     } catch (e) { toast.error(e.message) }
     setBusy(false)
@@ -68,20 +59,11 @@ function Login({ onSuccess }) {
             <p className="text-xs text-brand-charcoal/50">Chinmay Wellness Club</p>
           </div>
         </div>
-        {!sent ? (
-          <div className="space-y-3">
-            <p className="text-sm text-brand-charcoal/70">Admin email दर्ज करें — हम OTP भेजेंगे।</p>
-            <Input type="email" placeholder="admin@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Button onClick={send} disabled={busy || !email} className="w-full bg-brand-emerald text-white rounded-full">{busy ? <Loader2 className="animate-spin h-4 w-4" /> : 'Send OTP'}</Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-brand-charcoal/70">{email} पर भेजा गया 6-digit OTP दर्ज करें।</p>
-            <Input inputMode="numeric" maxLength={6} placeholder="______" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} className="text-center tracking-[0.5em] text-lg" />
-            <Button onClick={verify} disabled={busy || code.length !== 6} className="w-full bg-brand-emerald text-white rounded-full">{busy ? <Loader2 className="animate-spin h-4 w-4" /> : 'Verify & Login'}</Button>
-            <button onClick={() => setSent(false)} className="text-xs text-brand-emerald w-full text-center">Email बदलें</button>
-          </div>
-        )}
+        <form onSubmit={(e) => { e.preventDefault(); if (!busy && email && password) login() }} className="space-y-3">
+          <Input type="email" autoComplete="username" placeholder="admin@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Button type="submit" disabled={busy || !email || !password} className="w-full bg-brand-emerald text-white rounded-full">{busy ? <Loader2 className="animate-spin h-4 w-4" /> : 'Login'}</Button>
+        </form>
       </Card>
     </div>
   )
@@ -467,29 +449,67 @@ function ContentTab() {
 function AdminsTab() {
   const [list, setList] = useState([])
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [pwEdit, setPwEdit] = useState({}) // { [email]: newPasswordValue } — open when key present
   const load = () => api('/admin/admins').then(setList).catch((e) => toast.error(e.message))
   useEffect(() => { load() }, [])
+
   const add = async () => {
-    try { await api('/admin/admins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); setEmail(''); toast.success('Admin added'); load() }
-    catch (e) { toast.error(e.message) }
+    if (password.length < 8) { toast.error('Password कम से कम 8 characters का होना चाहिए'); return }
+    try {
+      await api('/admin/admins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
+      setEmail(''); setPassword(''); toast.success('Admin added'); load()
+    } catch (e) { toast.error(e.message) }
   }
-  const del = async (em) => { try { await api(`/admin/admins/${encodeURIComponent(em)}`, { method: 'DELETE' }); load() } catch (e) { toast.error(e.message) } }
+  const del = async (em) => { try { await api(`/admin/admins/${encodeURIComponent(em)}`, { method: 'DELETE' }); toast.success('Admin removed'); load() } catch (e) { toast.error(e.message) } }
+  const savePassword = async (em) => {
+    const newPw = pwEdit[em] || ''
+    if (newPw.length < 8) { toast.error('Password कम से कम 8 characters का होना चाहिए'); return }
+    try {
+      await api(`/admin/admins/${encodeURIComponent(em)}/password`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: newPw }) })
+      toast.success('Password updated')
+      setPwEdit((prev) => { const n = { ...prev }; delete n[em]; return n })
+    } catch (e) { toast.error(e.message) }
+  }
+
   return (
     <div className="max-w-xl">
       <h3 className="font-head font-extrabold text-lg mb-4">Manage Admins</h3>
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-col gap-2 mb-4">
         <Input placeholder="new-admin@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <Button onClick={add} className="bg-brand-emerald text-white rounded-full"><Plus className="h-4 w-4 mr-1" /> Add</Button>
+        <Input type="password" placeholder="Password (min 8 characters)" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <Button onClick={add} disabled={!email || !password} className="bg-brand-emerald text-white rounded-full w-fit"><Plus className="h-4 w-4 mr-1" /> Add Admin</Button>
       </div>
       <div className="grid gap-2">
         {list.map((a) => (
-          <Card key={a.email} className="p-3 rounded-xl flex items-center justify-between">
-            <span className="text-sm">{a.email} {a.locked && <Badge className="ml-2 bg-brand-mint text-brand-emerald-dark rounded-full">primary</Badge>}</span>
-            {!a.locked && <button onClick={() => del(a.email)} className="text-red-500"><Trash2 className="h-4 w-4" /></button>}
+          <Card key={a.email} className="p-3 rounded-xl">
+            <div className="flex items-center justify-between">
+              <span className="text-sm">{a.email} {a.locked && <Badge className="ml-2 bg-brand-mint text-brand-emerald-dark rounded-full">primary</Badge>}</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setPwEdit((prev) => { const n = { ...prev }; if (n[a.email] !== undefined) delete n[a.email]; else n[a.email] = ''; return n })}
+                  className="text-xs text-brand-emerald underline"
+                >
+                  {pwEdit[a.email] !== undefined ? 'Cancel' : 'Change password'}
+                </button>
+                {!a.locked && <button onClick={() => del(a.email)} className="text-red-500"><Trash2 className="h-4 w-4" /></button>}
+              </div>
+            </div>
+            {pwEdit[a.email] !== undefined && (
+              <div className="flex gap-2 mt-3">
+                <Input
+                  type="password"
+                  placeholder="New password (min 8 characters)"
+                  value={pwEdit[a.email]}
+                  onChange={(e) => setPwEdit((prev) => ({ ...prev, [a.email]: e.target.value }))}
+                />
+                <Button onClick={() => savePassword(a.email)} className="bg-brand-emerald text-white rounded-full shrink-0">Save</Button>
+              </div>
+            )}
           </Card>
         ))}
       </div>
-      <p className="text-xs text-brand-charcoal/50 mt-3">OTP login इन emails पर ही काम करता है।</p>
+      <p className="text-xs text-brand-charcoal/50 mt-3">Login इन emails पर email + password से होता है (OTP अब नहीं है)।</p>
     </div>
   )
 }
