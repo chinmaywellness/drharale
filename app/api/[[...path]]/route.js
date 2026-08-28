@@ -190,6 +190,7 @@ const DEFAULT_CONTENT = {
     image: IMG.founder,
     bio: 'डॉ. चंद्रशेखर हराळे यांनी स्वतः एक कठीण lifestyle health journey अनुभवली आहे — सतत discipline, योग्य nutrition आणि consistent workout च्या मदतीने त्यांनी स्वतःचं वजन आणि एकंदर आरोग्य लक्षणीयरीत्या सुधारलं, कोणत्याही shortcuts शिवाय. हाच अनुभव आज ते Chinmay Wellness Club च्या माध्यमातून १००+ सदस्यांसोबत share करत आहेत — प्रत्येकाला त्यांची स्वतःची, sustainable health journey सुरू करण्यास मदत करत आहेत. कोणतेही bots नाहीत, कोणतेही assistants नाहीत — प्रत्येक सदस्याला थेट, वैयक्तिक मार्गदर्शन डॉ. हराळे स्वतः देतात, रोज सकाळी.',
     quote: '"मी फक्त वजन कमी करायला मदत करत नाही — मी अशी शाश्वत जीवनशैली तयार करायला मदत करतो जी तुम्ही आयुष्यभर सहज जगू शकाल, कारण मी स्वतः तीच journey जगलो आहे."',
+    credentialsBanner: '',
   },
   achievements: {
     heading: 'Experience You Can Trust',
@@ -214,6 +215,13 @@ const DEFAULT_CONTENT = {
     ctaPrimary: 'Check Batch Availability', ctaSecondary: 'Discovery Call',
   },
   footer: { tagline: 'वजन नहीं, जीवनशैली बदलिए। — Kolhapur, Maharashtra', address: 'Kolhapur, Maharashtra, India', email: '' },
+  finalCta: {
+    enabled: true,
+    image: IMG.group,
+    heading: 'अब और इंतज़ार नहीं — अपनी sustainable journey आज शुरू करें',
+    subheading: "इस महीने के batch में सीमित seats बची हैं — Dr. Harale से सीधे बात करें।",
+    ctaText: 'Check Batch Availability',
+  },
   booking: {
     heading: 'Book Your Free Discovery Call',
     subheading: 'एक call जो आपकी journey बदल सकती है',

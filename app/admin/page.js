@@ -397,6 +397,11 @@ function ContentTab() {
         <div><label className="text-sm font-medium text-brand-charcoal/70">About image</label><ImageField value={c.about.image} onChange={(v) => set('about.image', v)} /></div>
         <F label="Bio paragraph" path="about.bio" area />
         <F label="Pull-quote" path="about.quote" area />
+        <div>
+          <label className="text-sm font-medium text-brand-charcoal/70">Credentials / recognition banner (optional — wide strip, e.g. certificates, media logos)</label>
+          <ImageField value={c.about.credentialsBanner} onChange={(v) => set('about.credentialsBanner', v)} />
+          <p className="text-xs text-brand-charcoal/50 mt-1">खाली छोड़ें तो यह section hide रहेगा।</p>
+        </div>
       </Card>
 
       <Card className="p-5 rounded-2xl space-y-3">
@@ -430,6 +435,15 @@ function ContentTab() {
         <div><label className="text-sm font-medium text-brand-charcoal/70">Popup image</label><ImageField value={c.popup.image} onChange={(v) => set('popup.image', v)} /></div>
         <F label="Headline" path="popup.headline" />
         <F label="Credibility line" path="popup.credibility" area />
+      </Card>
+
+      <Card className="p-5 rounded-2xl space-y-3">
+        <h3 className="font-head font-bold text-brand-emerald">Final CTA banner (before footer)</h3>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={c.finalCta?.enabled} onChange={(e) => set('finalCta.enabled', e.target.checked)} /> Enable this section</label>
+        <div><label className="text-sm font-medium text-brand-charcoal/70">Background banner</label><ImageField value={c.finalCta?.image} onChange={(v) => set('finalCta.image', v)} /></div>
+        <F label="Heading" path="finalCta.heading" area />
+        <F label="Subheading" path="finalCta.subheading" />
+        <F label="Button text" path="finalCta.ctaText" />
       </Card>
 
       <Card className="p-5 rounded-2xl space-y-3">

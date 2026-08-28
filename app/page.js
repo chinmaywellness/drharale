@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion, useInView, animate } from 'framer-motion'
 import {
   Menu, X, MessageCircle, Phone, CheckCircle2, Star, Salad, HeartPulse, UserRound,
   ArrowRight, ChevronLeft, ChevronRight, CalendarDays, Clock, Sparkles, ShieldCheck,
@@ -27,15 +27,24 @@ function vimeoEmbed(url) {
   const m = String(url).match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/)
   return m ? `https://player.vimeo.com/video/${m[1]}` : null
 }
+// Smooth, considered easing (not the default framer ease) — used consistently
+// so every reveal across the page feels like one signature motion, not
+// scattered effects. Respects prefers-reduced-motion everywhere it's used.
+const EASE = [0.16, 1, 0.3, 1]
 const fade = {
-  hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6 } },
+  hidden: { opacity: 0, y: 28 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: EASE } },
+}
+const staggerContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.12, delayChildren: 0.05 } },
 }
 
 const GOALS = ['Weight Loss', 'More Energy', 'Manage Lifestyle Habits', 'Family Program']
 const TIMES = ['Morning', 'Afternoon', 'Evening']
 
 export default function App() {
+  const prefersReducedMotion = useReducedMotion()
   const [content, setContent] = useState(null)
   const [testimonials, setTestimonials] = useState([])
   const [transformations, setTransformations] = useState([])
@@ -107,7 +116,7 @@ export default function App() {
   ]
 
   return (
-    <div className="min-h-screen bg-brand-offwhite text-brand-charcoal font-body overflow-x-hidden">
+    <div className="min-h-screen bg-brand-offwhite text-brand-charcoal font-body overflow-x-hidden pb-16 lg:pb-0">
       {/* ===== Header ===== */}
       <header className="sticky top-0 z-40 bg-brand-offwhite/85 backdrop-blur-md border-b border-brand-emerald/10">
         <div className="container flex items-center justify-between h-16">
@@ -151,37 +160,61 @@ export default function App() {
       <a
         href={waLink('नमस्ते! मुझे Chinmay Wellness Club के बारे में जानना है।')}
         target="_blank" rel="noreferrer"
-        className="fixed bottom-5 right-5 z-50 h-14 w-14 rounded-full bg-[#25D366] text-white grid place-items-center shadow-xl hover:scale-105 transition"
+        className="fixed bottom-20 lg:bottom-5 right-5 z-50 h-14 w-14 rounded-full bg-[#25D366] text-white grid place-items-center shadow-xl hover:scale-105 transition"
         aria-label="WhatsApp"
       >
         <MessageCircle className="h-7 w-7" />
       </a>
 
+      {/* ===== Sticky mobile CTA bar ===== */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-brand-emerald/10 px-4 py-3 flex gap-2 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+        <Button onClick={() => scrollTo('booking')} className="flex-1 bg-brand-coral hover:bg-brand-coral-dark text-white rounded-full">
+          {content.hero.ctaPrimary}
+        </Button>
+      </div>
+
       {/* ===== Hero ===== */}
-      <section id="hero" className="relative">
+      <section id="hero" className="relative overflow-hidden">
         <div className="absolute inset-0">
           <img src={content.hero.image} alt="Wellness lifestyle" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-brand-charcoal/90 via-brand-emerald-dark/80 to-brand-emerald/50" />
         </div>
+        {/* ambient "breathing" glow — a slow, calm pulse that echoes the brand's
+            breath/mindfulness cue, kept subtle and paused for reduced-motion */}
+        <motion.div
+          aria-hidden
+          className="absolute -top-24 -right-24 h-[420px] w-[420px] rounded-full bg-brand-mint/20 blur-3xl pointer-events-none"
+          animate={prefersReducedMotion ? {} : { scale: [1, 1.15, 1], opacity: [0.5, 0.8, 0.5] }}
+          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          aria-hidden
+          className="absolute -bottom-32 -left-16 h-[360px] w-[360px] rounded-full bg-brand-coral/10 blur-3xl pointer-events-none"
+          animate={prefersReducedMotion ? {} : { scale: [1, 1.1, 1], opacity: [0.4, 0.7, 0.4] }}
+          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+        />
         <div className="relative container py-16 md:py-24 grid md:grid-cols-2 gap-10 items-center">
-          <motion.div initial="hidden" animate="show" variants={fade}>
-            <Badge className="bg-brand-mint text-brand-emerald-dark hover:bg-brand-mint rounded-full mb-4 font-semibold">{content.hero.badge}</Badge>
-            <h1 className="font-hindi text-white text-3xl md:text-5xl font-extrabold leading-tight mb-3">{content.hero.titleHi}</h1>
-            <p className="text-brand-mint font-head font-semibold text-lg md:text-xl mb-4">{content.hero.titleEn}</p>
-            <p className="text-white/85 text-base md:text-lg mb-6 max-w-xl">{content.hero.subtitle}</p>
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => scrollTo('booking')} size="lg" className="bg-brand-coral hover:bg-brand-coral-dark text-white rounded-full text-base px-6">
+          <motion.div initial="hidden" animate="show" variants={staggerContainer}>
+            <motion.div variants={fade}><Badge className="bg-brand-mint text-brand-emerald-dark hover:bg-brand-mint rounded-full mb-4 font-semibold">{content.hero.badge}</Badge></motion.div>
+            <motion.h1 variants={fade} className="font-hindi text-white text-3xl md:text-5xl font-extrabold leading-tight mb-3">{content.hero.titleHi}</motion.h1>
+            <motion.p variants={fade} className="text-brand-mint font-head font-semibold text-lg md:text-xl mb-4">{content.hero.titleEn}</motion.p>
+            <motion.p variants={fade} className="text-white/85 text-base md:text-lg mb-6 max-w-xl">{content.hero.subtitle}</motion.p>
+            <motion.div variants={fade} className="flex flex-wrap gap-3">
+              <Button onClick={() => scrollTo('booking')} size="lg" className="bg-brand-coral hover:bg-brand-coral-dark text-white rounded-full text-base px-6 shadow-lg shadow-brand-coral/30 hover:shadow-xl hover:shadow-brand-coral/40 transition-all hover:-translate-y-0.5">
                 {content.hero.ctaPrimary} <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
-              <Button onClick={() => setLeadOpen(true)} size="lg" variant="outline" className="rounded-full border-white text-white bg-white/10 hover:bg-white hover:text-brand-emerald text-base px-6">
+              <Button onClick={() => setLeadOpen(true)} size="lg" variant="outline" className="rounded-full border-white text-white bg-white/10 hover:bg-white hover:text-brand-emerald text-base px-6 transition-all hover:-translate-y-0.5">
                 {content.hero.ctaSecondary}
               </Button>
-            </div>
-            <p className="text-brand-mint/90 text-sm mt-4 flex items-center gap-2"><Sparkles className="h-4 w-4" /> {content.hero.urgency}</p>
+            </motion.div>
+            <motion.p variants={fade} className="text-brand-mint/90 text-sm mt-4 flex items-center gap-2">
+              <motion.span animate={prefersReducedMotion ? {} : { opacity: [1, 0.4, 1] }} transition={{ duration: 2, repeat: Infinity }}><Sparkles className="h-4 w-4" /></motion.span>
+              {content.hero.urgency}
+            </motion.p>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.2 }} className="justify-self-center">
-            <Card className="p-4 bg-white/95 backdrop-blur rounded-3xl shadow-2xl max-w-xs">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, delay: 0.3, ease: EASE }} className="justify-self-center">
+            <Card className="p-4 bg-white/95 backdrop-blur rounded-3xl shadow-2xl max-w-xs hover:shadow-[0_20px_60px_rgba(15,107,76,0.35)] transition-shadow duration-500">
               <img src={content.hero.founderImage} alt={content.hero.founderName} className="w-full h-56 object-cover rounded-2xl mb-3" />
               <p className="font-hindi text-brand-charcoal text-sm italic mb-3">{content.hero.missionLine}</p>
               <div className="flex items-center gap-2 border-t border-brand-emerald/10 pt-3">
@@ -198,13 +231,13 @@ export default function App() {
 
       {/* ===== Program ===== */}
       <Section id="program" heading={content.program.heading} sub={content.program.subheading}>
-        <div className="grid md:grid-cols-3 gap-6">
+        <motion.div className="grid md:grid-cols-3 gap-6" initial="hidden" whileInView="show" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer}>
           {content.program.cards.map((c, i) => {
             const Ic = iconMap[c.icon] || Sparkles
             return (
-              <motion.div key={i} variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}>
-                <Card className="p-6 h-full rounded-2xl border-brand-emerald/10 hover:shadow-lg transition bg-white">
-                  <div className="h-12 w-12 rounded-xl bg-brand-mint-soft grid place-items-center mb-4">
+              <motion.div key={i} variants={fade}>
+                <Card className="group p-6 h-full rounded-2xl border-brand-emerald/10 bg-white transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-brand-emerald/10 hover:border-brand-emerald/20">
+                  <div className="h-12 w-12 rounded-xl bg-brand-mint-soft grid place-items-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:bg-brand-mint">
                     <Ic className="h-6 w-6 text-brand-emerald" />
                   </div>
                   <h3 className="font-head font-bold text-lg text-brand-charcoal mb-3">{c.title}</h3>
@@ -216,22 +249,22 @@ export default function App() {
               </motion.div>
             )
           })}
-        </div>
+        </motion.div>
       </Section>
 
       {/* ===== Process ===== */}
       <Section id="process" heading={content.process.heading} sub={content.process.subheading} tint>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <motion.div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6" initial="hidden" whileInView="show" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer}>
           {content.process.steps.map((s, i) => (
-            <motion.div key={i} variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}>
-              <Card className="p-6 h-full rounded-2xl bg-white border-brand-emerald/10 relative">
-                <div className="h-10 w-10 rounded-full bg-brand-emerald text-white grid place-items-center font-head font-extrabold mb-4">{i + 1}</div>
+            <motion.div key={i} variants={fade}>
+              <Card className="group p-6 h-full rounded-2xl bg-white border-brand-emerald/10 relative transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-brand-emerald/10">
+                <div className="h-10 w-10 rounded-full bg-brand-emerald text-white grid place-items-center font-head font-extrabold mb-4 transition-transform duration-300 group-hover:scale-110">{i + 1}</div>
                 <h3 className="font-hindi font-bold text-brand-charcoal mb-1">{s.title}</h3>
                 <p className="text-sm text-brand-charcoal/70">{s.desc}</p>
               </Card>
             </motion.div>
           ))}
-        </div>
+        </motion.div>
       </Section>
 
       {/* ===== Testimonials (Vimeo carousel) ===== */}
@@ -256,20 +289,25 @@ export default function App() {
             </div>
           </motion.div>
         </div>
+        {content.about.credentialsBanner && (
+          <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} className="mt-10">
+            <img src={content.about.credentialsBanner} alt={`${content.hero.founderName} — credentials & recognition`} className="w-full max-h-40 md:max-h-52 object-cover rounded-2xl shadow-md" />
+          </motion.div>
+        )}
       </Section>
 
       {/* ===== Achievements ===== */}
       <Section id="achievements" heading={content.achievements.heading} sub={content.achievements.subheading}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <motion.div className="grid grid-cols-2 lg:grid-cols-4 gap-5" initial="hidden" whileInView="show" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer}>
           {content.achievements.stats.map((s, i) => (
-            <motion.div key={i} variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}>
-              <Card className="p-6 text-center rounded-2xl bg-gradient-to-br from-brand-emerald to-brand-emerald-dark text-white">
-                <p className="font-head font-extrabold text-4xl mb-1">{s.value}</p>
+            <motion.div key={i} variants={fade}>
+              <Card className="p-6 text-center rounded-2xl bg-gradient-to-br from-brand-emerald to-brand-emerald-dark text-white transition-transform duration-300 hover:scale-[1.03] hover:shadow-xl hover:shadow-brand-emerald/30">
+                <p className="font-head font-extrabold text-4xl mb-1"><CountUp value={s.value} /></p>
                 <p className="text-sm text-brand-mint">{s.label}</p>
               </Card>
             </motion.div>
           ))}
-        </div>
+        </motion.div>
       </Section>
 
       {/* ===== Gallery ===== */}
@@ -285,7 +323,7 @@ export default function App() {
         </div>
         <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
           {(content.community.images || []).map((img, i) => (
-            <img key={i} src={img} alt={`Community ${i + 1}`} className="h-44 w-64 object-cover rounded-2xl shrink-0 shadow" />
+            <img key={i} src={img} alt={`Community ${i + 1}`} className="h-44 w-64 object-cover rounded-2xl shrink-0 shadow transition-transform duration-300 hover:scale-[1.03] hover:shadow-lg" />
           ))}
         </div>
       </Section>
@@ -295,7 +333,7 @@ export default function App() {
         <div className="grid md:grid-cols-2 gap-6">
           {transformations.map((t) => (
             <motion.div key={t.id} variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}>
-              <Card className="p-4 rounded-2xl bg-white border-brand-emerald/10">
+              <Card className="p-4 rounded-2xl bg-white border-brand-emerald/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-emerald/10">
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-head font-bold text-brand-charcoal">{t.name}</span>
                   <Badge className="bg-brand-mint text-brand-emerald-dark rounded-full">{t.resultTag}</Badge>
@@ -336,6 +374,35 @@ export default function App() {
           </Accordion>
         </div>
       </Section>
+
+      {/* ===== Final CTA banner ===== */}
+      {content.finalCta?.enabled && (
+        <section className="relative py-20 overflow-hidden">
+          <div className="absolute inset-0">
+            <img src={content.finalCta.image} alt="" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-emerald-dark/95 via-brand-emerald/90 to-brand-charcoal/90" />
+          </div>
+          <motion.div
+            className="relative container text-center max-w-2xl"
+            initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer}
+          >
+            <motion.div variants={fade}>
+              <ShieldCheck className="h-10 w-10 text-brand-mint mx-auto mb-4" />
+            </motion.div>
+            <motion.h2 variants={fade} className="font-hindi text-white text-2xl md:text-4xl font-extrabold leading-tight mb-4">
+              {content.finalCta.heading}
+            </motion.h2>
+            <motion.p variants={fade} className="text-brand-mint/90 text-base md:text-lg mb-8">
+              {content.finalCta.subheading}
+            </motion.p>
+            <motion.div variants={fade}>
+              <Button onClick={() => scrollTo('booking')} size="lg" className="bg-brand-coral hover:bg-brand-coral-dark text-white rounded-full text-base px-8 shadow-xl shadow-brand-coral/30 hover:-translate-y-0.5 transition-all">
+                {content.finalCta.ctaText} <ArrowRight className="ml-1 h-4 w-4" />
+              </Button>
+            </motion.div>
+          </motion.div>
+        </section>
+      )}
 
       {/* ===== Footer ===== */}
       <footer className="bg-brand-charcoal text-white pt-14 pb-8">
@@ -399,15 +466,46 @@ function Section({ id, heading, sub, tint, children }) {
   return (
     <section id={id} className={`py-16 md:py-20 ${tint ? 'bg-brand-mint-soft/40' : ''}`}>
       <div className="container">
-        <div className="text-center mb-10">
-          {sub && <p className="text-brand-coral font-semibold font-hindi mb-1">{sub}</p>}
-          <h2 className="font-head font-extrabold text-2xl md:text-4xl text-brand-charcoal">{heading}</h2>
-          <div className="h-1 w-16 bg-brand-coral rounded-full mx-auto mt-4" />
-        </div>
+        <motion.div
+          className="text-center mb-10"
+          initial="hidden" whileInView="show" viewport={{ once: true, margin: '-80px' }}
+          variants={staggerContainer}
+        >
+          {sub && <motion.p variants={fade} className="text-brand-coral font-semibold font-hindi mb-1">{sub}</motion.p>}
+          <motion.h2 variants={fade} className="font-head font-extrabold text-2xl md:text-4xl text-brand-charcoal">{heading}</motion.h2>
+          <motion.div
+            variants={{ hidden: { scaleX: 0 }, show: { scaleX: 1, transition: { duration: 0.6, ease: EASE } } }}
+            className="h-1 w-16 bg-brand-coral rounded-full mx-auto mt-4 origin-center"
+          />
+        </motion.div>
         {children}
       </div>
     </section>
   )
+}
+
+/* ---------------- Animated count-up (for achievement stats like "100+") ---------------- */
+function CountUp({ value }) {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: '-40px' })
+  const [display, setDisplay] = useState(value)
+  const reduceMotion = useReducedMotion()
+
+  useEffect(() => {
+    if (!inView) return
+    const match = String(value).match(/^(\d+)(.*)$/)
+    if (!match || reduceMotion) { setDisplay(value); return }
+    const [, numStr, suffix] = match
+    const target = parseInt(numStr, 10)
+    const controls = animate(0, target, {
+      duration: 1.4,
+      ease: EASE,
+      onUpdate: (v) => setDisplay(`${Math.round(v)}${suffix}`),
+    })
+    return () => controls.stop()
+  }, [inView, value, reduceMotion])
+
+  return <span ref={ref}>{display}</span>
 }
 
 /* ---------------- Video Carousel ---------------- */
