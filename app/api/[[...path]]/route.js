@@ -365,7 +365,10 @@ async function handleRoute(request, { params }) {
       if (!name || !whatsapp) return json({ error: 'Name and WhatsApp required' }, 400)
       const row = { name, whatsapp, email: clean(body.email, 120), goal: clean(body.goal, 60), preferred_time: clean(body.contactTime, 40), status: 'New' }
       const { data, error } = await svcC.from('leads').insert(row).select('id').single()
-      if (error) return json({ error: 'Could not save' }, 500)
+      if (error) {
+        console.error(`leads insert failed: ${error.message} (code ${error.code || 'n/a'}) — is 'leads' table missing/out of date? run supabase/migration.sql`)
+        return json({ error: 'Could not save' }, 500)
+      }
       sendSubmissionEmails({ ...row, id: data.id, type: 'lead', contactTime: row.preferred_time })
       return json({ ok: true, id: data.id })
     }
@@ -383,6 +386,7 @@ async function handleRoute(request, { params }) {
       const { data, error } = await svcC.from('bookings').insert(row).select('id').single()
       if (error) {
         if (error.code === '23505') return json({ error: 'Slot just got booked, choose another' }, 409)
+        console.error(`bookings insert failed: ${error.message} (code ${error.code || 'n/a'}) — is 'bookings' table missing/out of date? run supabase/migration.sql`)
         return json({ error: 'Could not save' }, 500)
       }
       sendSubmissionEmails({ ...row, id: data.id, type: 'booking', date: booking_date, time: slot })
@@ -400,8 +404,16 @@ async function handleRoute(request, { params }) {
 
       const { data: row, error } = await svcC.from('admins').select('email, password_hash').eq('email', email).maybeSingle()
       if (error) console.error(`login: DB check failed for ${email} — ${error.message} (is 'admins' table missing 'password_hash'? run supabase/migration.sql)`)
-      if (!row || !row.password_hash || !verifyPassword(password, row.password_hash)) {
-        console.log(`login: failed attempt for ${email}`)
+      if (!row) {
+        console.log(`login: failed — no admin row for ${email} (run supabase/migration.sql, or add this admin from the Admins tab if another admin can still log in)`)
+        return json({ error: 'Invalid email or password' }, 401)
+      }
+      if (!row.password_hash) {
+        console.log(`login: failed — ${email} exists in admins table but has NO password_hash set. Re-run the latest supabase/migration.sql (it seeds samfonde0@gmail.com's password), or set one via PUT /api/admin/admins/${email}/password once another admin can log in.`)
+        return json({ error: 'Invalid email or password' }, 401)
+      }
+      if (!verifyPassword(password, row.password_hash)) {
+        console.log(`login: failed — wrong password for ${email}`)
         return json({ error: 'Invalid email or password' }, 401)
       }
       const res = json({ ok: true, email })
@@ -422,6 +434,53 @@ async function handleRoute(request, { params }) {
     if (route.startsWith('/admin/')) {
       const admin = await requireAdmin(request)
       if (!admin) return json({ error: 'Unauthorized' }, 401)
+
+      // system health check — for the site owner to self-diagnose without
+      // needing server-log access. Checks every table the app depends on,
+      // plus the specific things that have broken before (admin password
+      // hash present, required env vars set).
+      if (route === '/admin/health' && method === 'GET') {
+        const checks = []
+        const tableCheck = async (table) => {
+          const { error, count } = await svcC.from(table).select('*', { count: 'exact', head: true })
+          checks.push({
+            name: `Table: ${table}`,
+            ok: !error,
+            detail: error ? error.message : `reachable (${count ?? 0} rows)`,
+          })
+        }
+        await Promise.all(['site_content', 'testimonials', 'transformations', 'gallery', 'faqs', 'leads', 'bookings', 'admins'].map(tableCheck))
+
+        // admin password_hash specifically — the most common real-world break
+        const { data: adminRows, error: adminErr } = await svcC.from('admins').select('email, password_hash')
+        if (adminErr) {
+          checks.push({ name: 'Admin passwords', ok: false, detail: `Could not read admins table — ${adminErr.message}` })
+        } else {
+          const withoutPassword = (adminRows || []).filter((a) => !a.password_hash)
+          checks.push({
+            name: 'Admin passwords',
+            ok: (adminRows || []).length > 0 && withoutPassword.length === 0,
+            detail: !adminRows?.length
+              ? 'No admin rows found at all — run supabase/migration.sql'
+              : withoutPassword.length
+                ? `No password set for: ${withoutPassword.map((a) => a.email).join(', ')} — set one from the Admins tab, or re-run supabase/migration.sql`
+                : `${adminRows.length} admin(s), all have a password set`,
+          })
+        }
+
+        const envChecks = [
+          ['SESSION_SECRET', SESSION_SECRET],
+          ['SUPABASE_SERVICE_ROLE_KEY', SERVICE_KEY],
+          ['NEXT_PUBLIC_SUPABASE_ANON_KEY', ANON_KEY],
+          ['RESEND_API_KEY', process.env.RESEND_API_KEY],
+          ['RESEND_FROM', FROM],
+        ]
+        for (const [name, val] of envChecks) {
+          checks.push({ name: `Env: ${name}`, ok: Boolean(val), detail: val ? 'set' : 'MISSING — set this in Hostinger env vars and redeploy' })
+        }
+
+        return json({ checks, allOk: checks.every((c) => c.ok) })
+      }
 
       // content
       if (route === '/admin/content' && method === 'PUT') {

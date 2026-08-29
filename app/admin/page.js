@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import {
   MessageCircle, LogOut, Plus, Trash2, Save, Loader2, Sparkles, Search, Upload, RefreshCw,
+  CheckCircle2, XCircle, HeartPulse,
 } from 'lucide-react'
 
 const STATUSES = ['New', 'Confirmed', 'Completed', 'No-show']
@@ -98,6 +99,7 @@ function Dashboard({ onLogout }) {
             <TabsTrigger value="faqs">FAQ</TabsTrigger>
             <TabsTrigger value="content">Content</TabsTrigger>
             <TabsTrigger value="admins">Admins</TabsTrigger>
+            <TabsTrigger value="health">Health</TabsTrigger>
           </TabsList>
 
           <TabsContent value="bookings"><SubmissionsTab endpoint="/admin/bookings" isBooking /></TabsContent>
@@ -133,6 +135,7 @@ function Dashboard({ onLogout }) {
           </TabsContent>
           <TabsContent value="content"><ContentTab /></TabsContent>
           <TabsContent value="admins"><AdminsTab /></TabsContent>
+          <TabsContent value="health"><HealthTab /></TabsContent>
         </Tabs>
       </div>
     </div>
@@ -524,6 +527,56 @@ function AdminsTab() {
         ))}
       </div>
       <p className="text-xs text-brand-charcoal/50 mt-3">Login इन emails पर email + password से होता है (OTP अब नहीं है)।</p>
+    </div>
+  )
+}
+
+/* ---------------- System Health ---------------- */
+function HealthTab() {
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const run = async () => {
+    setLoading(true)
+    try {
+      const r = await api('/admin/health')
+      setResult(r)
+    } catch (e) {
+      toast.error(e.message)
+    }
+    setLoading(false)
+  }
+  useEffect(() => { run() }, [])
+
+  return (
+    <div className="max-w-2xl">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-head font-extrabold text-lg flex items-center gap-2"><HeartPulse className="h-5 w-5 text-brand-emerald" /> System Health</h3>
+        <Button onClick={run} disabled={loading} variant="outline" className="rounded-full border-brand-emerald text-brand-emerald">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />} Recheck
+        </Button>
+      </div>
+      <p className="text-sm text-brand-charcoal/60 mb-4">
+        यह check करता है कि database, admin passwords, और ज़रूरी settings सही से जुड़े हैं या नहीं — अगर कोई booking/lead/login fail हो रहा है तो सबसे पहले यहाँ देखें।
+      </p>
+      {result && (
+        <div className={`mb-4 p-3 rounded-xl text-sm font-semibold ${result.allOk ? 'bg-brand-mint-soft text-brand-emerald-dark' : 'bg-red-50 text-red-700'}`}>
+          {result.allOk ? '✓ सब कुछ ठीक है — everything is working.' : '⚠ कुछ चीज़ें ठीक नहीं हैं — नीचे देखें।'}
+        </div>
+      )}
+      <div className="grid gap-2">
+        {(result?.checks || []).map((c, i) => (
+          <Card key={i} className={`p-3 rounded-xl border ${c.ok ? 'border-brand-emerald/10' : 'border-red-300 bg-red-50/50'}`}>
+            <div className="flex items-start gap-2">
+              {c.ok ? <CheckCircle2 className="h-5 w-5 text-brand-emerald shrink-0 mt-0.5" /> : <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />}
+              <div>
+                <p className="text-sm font-semibold">{c.name}</p>
+                <p className="text-xs text-brand-charcoal/60">{c.detail}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
     </div>
   )
 }
