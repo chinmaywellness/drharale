@@ -3,14 +3,14 @@
 A production-ready, bilingual (Hindi + English) wellness-coaching website for **Dr. Chandrashekhar Harale**, Kolhapur — built on **Next.js (App Router) + Supabase (Postgres, Auth, Storage) + Resend**.
 
 ## Features
-- Public landing page: hero, program, process, Vimeo video-testimonial carousel, founder story, achievement stats, filterable gallery, community strip, transformations (with mandatory bilingual disclaimer), 3-step booking widget, FAQ, footer, welcome popup, multi-step lead form.
-- Admin panel (`/admin`): Supabase-Auth email OTP login, bookings & leads dashboards (status + WhatsApp + search), full CRUD for testimonials / transformations / gallery / FAQ, content editor, booking-slot config, multi-admin management, image upload to Supabase Storage.
-- SEO/AEO: semantic HTML, JSON-LD (LocalBusiness + FAQPage + AggregateRating/Review from real data), `sitemap.xml`, `robots.txt`, editable meta + image alt text.
+- Public landing page: hero, program, process, Vimeo video-testimonial carousel, founder story, achievement stats, filterable gallery, community strip, transformations (with mandatory bilingual disclaimer), 3-step booking widget, FAQ, footer, welcome popup, multi-step lead form, final CTA banner.
+- Admin panel (`/admin`): email + password login (own session, not Supabase Auth), bookings & leads dashboards (status + WhatsApp + search), full CRUD for testimonials / transformations / gallery / FAQ, content editor, booking-slot config, multi-admin management (add admins, change any admin's password), a System Health tab for self-diagnosing DB/env issues, image upload to Supabase Storage.
+- SEO/AEO: semantic HTML, JSON-LD (LocalBusiness + Person + FAQPage + AggregateRating/Review from real data), `sitemap.xml`, `robots.txt`, editable meta + image alt text, dynamic OG/Twitter share image.
 
 ## Tech stack
 - Next.js 15 (App Router, API routes as backend)
-- Supabase: Postgres (data + RLS), Auth (email OTP), Storage (`site-images` bucket)
-- Resend (transactional email)
+- Supabase: Postgres (data + RLS), Storage (`site-images` bucket) — Supabase Auth is NOT used for admin login (see below)
+- Resend (transactional email + admin login is separate, see Admin login below)
 - Tailwind CSS + shadcn/ui, framer-motion
 
 ## Environment variables
@@ -21,12 +21,13 @@ See `.env.example`. Required:
 | `NEXT_PUBLIC_SUPABASE_URL` | public | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | Supabase anon key (RLS-protected) |
 | `NEXT_PUBLIC_WHATSAPP_NUMBER` | public | Click-to-chat number |
-| `NEXT_PUBLIC_SITE_URL` | public | Canonical site URL |
+| `NEXT_PUBLIC_SITE_URL` | public | Canonical site URL — also used by `robots.js`/`sitemap.js`/CORS, keep it in sync with whatever domain the site is actually served from |
 | `SUPABASE_URL` | server | Supabase URL (server) |
 | `SUPABASE_SERVICE_ROLE_KEY` | server secret | Service role for admin/server writes |
+| `SESSION_SECRET` | server secret | Signs the admin login session cookie — **required**, admin login is refused without it |
 | `RESEND_API_KEY` | server secret | Resend API key |
 | `RESEND_FROM` | server | Verified sender, e.g. `Chinmay Wellness Club <no-reply@chinmaywellnessclub.in>` |
-| `ADMIN_EMAIL` / `ADMIN_EMAILS` | server | Admin notification + OTP allowlist |
+| `ADMIN_EMAIL` / `ADMIN_EMAILS` | server | Admin notification recipient + primary-admin allowlist |
 
 > Migration-only (used once, not on the running server): `SUPABASE_DB_CONNECTION_STRING`, `SUPABASE_ACCESS_TOKEN`.
 
@@ -76,4 +77,7 @@ npm start              # serves on PORT (default 3000)
 If your current Hostinger plan is static-only, host on a Node-capable target (Hostinger VPS, Vercel, Railway, Render) — the codebase is standard Next.js and deploys as-is.
 
 ## Admin login
-Go to `/admin` → enter an allow-listed admin email → **Send OTP** → enter the 6-digit code from the email. No password. Add/remove admins from the **Admins** tab.
+Go to `/admin` → enter your admin email + password → **Login**. Add new admins
+and change any admin's password from the **Admins** tab. If anything (login,
+bookings, leads) misbehaves after a deploy, check the **Health** tab first —
+it checks every database table and required env var in one place.
