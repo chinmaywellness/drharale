@@ -145,6 +145,7 @@ const DISCLAIMER = 'यह परिणाम सामान्य नहीं
 
 const DEFAULT_CONTENT = {
   siteName: 'Chinmay Wellness Club',
+  logo: { url: '', heightMobile: 32, heightDesktop: 40 },
   whatsapp: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '919975727098',
   rating: '4.9',
   seo: {
@@ -163,6 +164,8 @@ const DEFAULT_CONTENT = {
     founderName: 'Dr. Chandrashekhar Harale',
     founderTitle: 'Founder & Wellness Coach',
     founderImage: IMG.founder,
+    founderMediaType: 'image',
+    founderVideoUrl: '',
     missionLine: '"मी फक्त वजन कमी करायला मदत करत नाही — मी अशी शाश्वत जीवनशैली तयार करायला मदत करतो जी तुम्ही आयुष्यभर सहज जगू शकाल."',
   },
   program: {

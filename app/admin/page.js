@@ -371,6 +371,20 @@ function ContentTab() {
       <Card className="p-5 rounded-2xl space-y-3">
         <h3 className="font-head font-bold text-brand-emerald">General</h3>
         <F label="Site name" path="siteName" />
+        <div>
+          <label className="text-sm font-medium text-brand-charcoal/70">Brand logo (optional — leave empty to show the default "C" badge + site name)</label>
+          <ImageField value={c.logo?.url} onChange={(v) => set('logo.url', v)} />
+          <div className="flex gap-2 mt-2">
+            <div className="flex-1">
+              <label className="text-xs text-brand-charcoal/50">Height on mobile (px)</label>
+              <Input type="number" min="16" max="80" value={c.logo?.heightMobile ?? 32} onChange={(e) => set('logo.heightMobile', parseInt(e.target.value) || 32)} />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-brand-charcoal/50">Height on desktop (px)</label>
+              <Input type="number" min="16" max="120" value={c.logo?.heightDesktop ?? 40} onChange={(e) => set('logo.heightDesktop', parseInt(e.target.value) || 40)} />
+            </div>
+          </div>
+        </div>
         <F label="WhatsApp number (with country code)" path="whatsapp" />
         <F label="Rating (e.g. 4.9)" path="rating" />
         <F label="SEO Title" path="seo.title" />
@@ -389,7 +403,21 @@ function ContentTab() {
         <div><label className="text-sm font-medium text-brand-charcoal/70">Hero background image</label><ImageField value={c.hero.image} onChange={(v) => set('hero.image', v)} /></div>
         <F label="Founder name" path="hero.founderName" />
         <F label="Founder title" path="hero.founderTitle" />
-        <div><label className="text-sm font-medium text-brand-charcoal/70">Founder photo</label><ImageField value={c.hero.founderImage} onChange={(v) => set('hero.founderImage', v)} /></div>
+        <div>
+          <label className="text-sm font-medium text-brand-charcoal/70">Founder card media</label>
+          <div className="flex gap-2 mb-2">
+            <button type="button" onClick={() => set('hero.founderMediaType', 'image')} className={`px-3 py-1.5 rounded-full text-sm border ${(!c.hero.founderMediaType || c.hero.founderMediaType === 'image') ? 'bg-brand-emerald text-white border-brand-emerald' : 'border-brand-emerald/20'}`}>Photo</button>
+            <button type="button" onClick={() => set('hero.founderMediaType', 'video')} className={`px-3 py-1.5 rounded-full text-sm border ${c.hero.founderMediaType === 'video' ? 'bg-brand-emerald text-white border-brand-emerald' : 'border-brand-emerald/20'}`}>Video</button>
+          </div>
+          {c.hero.founderMediaType === 'video' ? (
+            <>
+              <Input placeholder="Vimeo or YouTube URL (e.g. https://vimeo.com/123456 or https://youtu.be/abc123)" value={c.hero.founderVideoUrl || ''} onChange={(e) => set('hero.founderVideoUrl', e.target.value)} />
+              <p className="text-xs text-brand-charcoal/50 mt-1">Yeh video हीरो के founder card में दिखेगा (photo के बजाय)।</p>
+            </>
+          ) : (
+            <ImageField value={c.hero.founderImage} onChange={(v) => set('hero.founderImage', v)} />
+          )}
+        </div>
         <F label="Mission line" path="hero.missionLine" area />
       </Card>
 

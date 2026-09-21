@@ -27,6 +27,15 @@ function vimeoEmbed(url) {
   const m = String(url).match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/)
   return m ? `https://player.vimeo.com/video/${m[1]}` : null
 }
+// Detects Vimeo or YouTube links (any common URL shape) and returns an
+// embeddable iframe src, or null if the URL doesn't match either.
+function getEmbedUrl(url) {
+  if (!url) return null
+  const v = vimeoEmbed(url)
+  if (v) return v
+  const y = String(url).match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{6,})/)
+  return y ? `https://www.youtube.com/embed/${y[1]}` : null
+}
 // Smooth, considered easing (not the default framer ease) — used consistently
 // so every reveal across the page feels like one signature motion, not
 // scattered effects. Respects prefers-reduced-motion everywhere it's used.
@@ -53,6 +62,7 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [popupOpen, setPopupOpen] = useState(false)
   const [leadOpen, setLeadOpen] = useState(false)
+  const [communityLbIndex, setCommunityLbIndex] = useState(null)
 
   useEffect(() => {
     const safeJson = async (url) => {
@@ -121,8 +131,17 @@ export default function App() {
       <header className="sticky top-0 z-40 bg-brand-offwhite/85 backdrop-blur-md border-b border-brand-emerald/10">
         <div className="container flex items-center justify-between h-16">
           <button onClick={() => scrollTo('hero')} className="flex items-center gap-2">
-            <span className="h-9 w-9 rounded-full bg-brand-emerald text-white grid place-items-center font-head font-extrabold">C</span>
-            <span className="font-head font-extrabold text-brand-emerald leading-tight text-sm sm:text-base">{content.siteName}</span>
+            {content.logo?.url ? (
+              <>
+                <img src={content.logo.url} alt={content.siteName} className="block md:hidden w-auto" style={{ height: `${content.logo.heightMobile || 32}px` }} />
+                <img src={content.logo.url} alt={content.siteName} className="hidden md:block w-auto" style={{ height: `${content.logo.heightDesktop || 40}px` }} />
+              </>
+            ) : (
+              <>
+                <span className="h-9 w-9 rounded-full bg-brand-emerald text-white grid place-items-center font-head font-extrabold">C</span>
+                <span className="font-head font-extrabold text-brand-emerald leading-tight text-sm sm:text-base">{content.siteName}</span>
+              </>
+            )}
           </button>
           <nav className="hidden lg:flex items-center gap-6">
             {nav.map(([label, id]) => (
@@ -215,7 +234,19 @@ export default function App() {
 
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, delay: 0.3, ease: EASE }} className="justify-self-center">
             <Card className="p-4 bg-white/95 backdrop-blur rounded-3xl shadow-2xl max-w-xs hover:shadow-[0_20px_60px_rgba(15,107,76,0.35)] transition-shadow duration-500">
-              <img src={content.hero.founderImage} alt={content.hero.founderName} className="w-full h-56 object-cover rounded-2xl mb-3" />
+              {content.hero.founderMediaType === 'video' && getEmbedUrl(content.hero.founderVideoUrl) ? (
+                <div className="w-full aspect-video rounded-2xl overflow-hidden mb-3 bg-brand-charcoal/5">
+                  <iframe
+                    src={getEmbedUrl(content.hero.founderVideoUrl)}
+                    className="w-full h-full"
+                    allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+                    allowFullScreen
+                    title={`${content.hero.founderName} — video`}
+                  />
+                </div>
+              ) : (
+                <img src={content.hero.founderImage} alt={content.hero.founderName} className="w-full h-56 object-cover rounded-2xl mb-3" />
+              )}
               <p className="font-hindi text-brand-charcoal text-sm italic mb-3">{content.hero.missionLine}</p>
               <div className="flex items-center gap-2 border-t border-brand-emerald/10 pt-3">
                 <div className="h-9 w-9 rounded-full bg-brand-emerald text-white grid place-items-center font-bold">Dr</div>
@@ -323,10 +354,19 @@ export default function App() {
         </div>
         <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
           {(content.community.images || []).map((img, i) => (
-            <img key={i} src={img} alt={`Community ${i + 1}`} className="h-44 w-64 object-cover rounded-2xl shrink-0 shadow transition-transform duration-300 hover:scale-[1.03] hover:shadow-lg" />
+            <button key={i} onClick={() => setCommunityLbIndex(i)} className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald rounded-2xl">
+              <img src={img} alt={`Community ${i + 1}`} className="h-44 w-64 object-cover rounded-2xl shadow transition-transform duration-300 hover:scale-[1.03] hover:shadow-lg cursor-pointer" />
+            </button>
           ))}
         </div>
       </Section>
+
+      <Lightbox
+        images={(content.community.images || []).map((img, i) => ({ url: img, alt: `Community ${i + 1}` }))}
+        index={communityLbIndex}
+        onClose={() => setCommunityLbIndex(null)}
+        onIndexChange={setCommunityLbIndex}
+      />
 
       {/* ===== Transformations ===== */}
       <Section id="results" heading="Real Transformations" sub="वास्तविक बदलाव">
@@ -409,7 +449,11 @@ export default function App() {
         <div className="container grid md:grid-cols-3 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="h-9 w-9 rounded-full bg-brand-emerald grid place-items-center font-head font-extrabold">C</span>
+              {content.logo?.url ? (
+                <img src={content.logo.url} alt={content.siteName} className="w-auto" style={{ height: `${content.logo.heightMobile || 32}px` }} />
+              ) : (
+                <span className="h-9 w-9 rounded-full bg-brand-emerald grid place-items-center font-head font-extrabold">C</span>
+              )}
               <span className="font-head font-extrabold">{content.siteName}</span>
             </div>
             <p className="text-white/60 text-sm font-hindi">{content.footer.tagline}</p>
@@ -508,6 +552,78 @@ function CountUp({ value }) {
   return <span ref={ref}>{display}</span>
 }
 
+/* ---------------- Lightbox (tap to preview, swipe / arrows to navigate) ---------------- */
+function Lightbox({ images, index, onClose, onIndexChange }) {
+  const open = index !== null && index !== undefined && images?.length > 0
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowRight') onIndexChange((index + 1) % images.length)
+      if (e.key === 'ArrowLeft') onIndexChange((index - 1 + images.length) % images.length)
+    }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
+  }, [open, index, images, onClose, onIndexChange])
+
+  if (!open) return null
+  const img = images[index]
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <button onClick={(e) => { e.stopPropagation(); onClose() }} aria-label="Close" className="absolute top-4 right-4 text-white/80 hover:text-white p-2 z-10">
+        <X className="h-7 w-7" />
+      </button>
+      {images.length > 1 && (
+        <>
+          <button
+            onClick={(e) => { e.stopPropagation(); onIndexChange((index - 1 + images.length) % images.length) }}
+            aria-label="Previous image"
+            className="absolute left-1 md:left-6 text-white/70 hover:text-white p-2 z-10"
+          >
+            <ChevronLeft className="h-9 w-9" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onIndexChange((index + 1) % images.length) }}
+            aria-label="Next image"
+            className="absolute right-1 md:right-6 text-white/70 hover:text-white p-2 z-10"
+          >
+            <ChevronRight className="h-9 w-9" />
+          </button>
+        </>
+      )}
+      <motion.img
+        key={img.url}
+        src={img.url}
+        alt={img.alt || ''}
+        drag={images.length > 1 ? 'x' : false}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.6}
+        onDragEnd={(e, info) => {
+          if (info.offset.x < -80) onIndexChange((index + 1) % images.length)
+          else if (info.offset.x > 80) onIndexChange((index - 1 + images.length) % images.length)
+        }}
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.2 }}
+        className="max-h-[85vh] max-w-[92vw] object-contain rounded-lg cursor-grab active:cursor-grabbing select-none touch-pan-y"
+      />
+      {images.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-sm font-medium">
+          {index + 1} / {images.length}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 /* ---------------- Video Carousel ---------------- */
 function VideoCarousel({ items }) {
   const ref = useRef(null)
@@ -555,24 +671,34 @@ function VideoCarousel({ items }) {
 /* ---------------- Gallery ---------------- */
 function GallerySection({ gallery }) {
   const [filter, setFilter] = useState('All')
+  const [lbIndex, setLbIndex] = useState(null)
   const cats = ['All', 'Sessions', 'Community', 'Results']
   const shown = filter === 'All' ? gallery : gallery.filter((g) => g.category === filter)
   return (
     <Section id="gallery" heading="Gallery" sub="हमारे पल">
       <div className="flex justify-center gap-2 mb-8 flex-wrap">
         {cats.map((c) => (
-          <button key={c} onClick={() => setFilter(c)}
+          <button key={c} onClick={() => { setFilter(c); setLbIndex(null) }}
             className={`px-4 py-2 rounded-full text-sm font-medium transition ${filter === c ? 'bg-brand-emerald text-white' : 'bg-white text-brand-charcoal/70 border border-brand-emerald/15'}`}>
             {c}
           </button>
         ))}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {shown.map((g) => (
-          <motion.img key={g.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            src={g.url} alt={g.alt} className="w-full h-56 object-cover rounded-2xl shadow-sm" />
+        {shown.map((g, i) => (
+          <motion.button key={g.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            onClick={() => setLbIndex(i)}
+            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald rounded-2xl">
+            <img src={g.url} alt={g.alt} className="w-full h-56 object-cover rounded-2xl shadow-sm cursor-pointer hover:opacity-90 transition" />
+          </motion.button>
         ))}
       </div>
+      <Lightbox
+        images={shown.map((g) => ({ url: g.url, alt: g.alt }))}
+        index={lbIndex}
+        onClose={() => setLbIndex(null)}
+        onIndexChange={setLbIndex}
+      />
     </Section>
   )
 }
